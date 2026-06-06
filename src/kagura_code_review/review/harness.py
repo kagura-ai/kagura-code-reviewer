@@ -4,6 +4,9 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 
+import httpx
+import openai
+
 from ..agent import run_agent
 from ..report import Finding, Report, Severity
 from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
@@ -45,10 +48,17 @@ def resolve_tier(name: str, config: dict | None = None) -> EffortTier:
     return replace(base, **fields)
 
 
+# Backend-connectivity errors that, if they take down ALL finders, should
+# surface to the CLI (friendly "is the daemon running?" path) rather than be
+# masked as an empty review.
+_BACKEND_ERRORS = (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError)
+
+
 @dataclass
 class FinderOutcome:
     findings: list
     errored: bool = False
+    error: Exception | None = None
 
 
 def _finder_system(angle: str) -> str:
@@ -69,8 +79,8 @@ def run_finder(client, repo, diff, context, angle, max_iters=12) -> FinderOutcom
     tools = _build_tools(repo)
     try:
         result = run_agent(client, messages, tools, max_iters=max_iters)
-    except Exception:
-        return FinderOutcome(findings=[], errored=True)
+    except Exception as exc:
+        return FinderOutcome(findings=[], errored=True, error=exc)
     if result.terminal_payload is None:
         return FinderOutcome(findings=[])
     findings = Report.from_payload(result.terminal_payload).findings
@@ -93,6 +103,12 @@ def run_finders(client, repo, diff, context, tier, max_iters=12, max_concurrency
 
     candidates = [f for o in outcomes for f in o.findings]
     any_errored = any(o.errored for o in outcomes)
+    # Total backend outage: every finder failed and every failure was a
+    # connectivity error -> propagate so the CLI shows its friendly message.
+    if outcomes and all(o.errored for o in outcomes) and all(
+        isinstance(o.error, _BACKEND_ERRORS) for o in outcomes
+    ):
+        raise outcomes[0].error
     return candidates, any_errored
 
 

@@ -1,3 +1,4 @@
+import pytest
 import json
 
 from kagura_code_review.agent import ChatMessage, ToolCall
@@ -313,3 +314,43 @@ def test_review_harness_clean_pass_when_no_findings_no_errors():
                             context=None, tier=tier, max_iters=4, max_concurrency=1)
     assert report.findings == []
     assert report.exit_code() == 0
+
+
+# ---- total-outage propagation -------------------------------------------
+
+def test_run_finders_reraises_when_all_backend_errored():
+    """A total backend outage propagates so the CLI can show its friendly
+    'is the daemon running?' message, instead of being masked as empty."""
+    import httpx
+    from kagura_code_review.review.harness import run_finders
+    tier = EffortTier("t", ["correctness-linescan", "cross-file"], repeats=1,
+                      verify_votes=1, verify_votes_correctness=1, max_findings=10)
+
+    class Down:
+        def chat(self, messages, tools=None):
+            raise httpx.ConnectError("connection refused")
+
+    with pytest.raises(httpx.HTTPError):
+        run_finders(Down(), StubRepo(), "d", None, tier, max_iters=3, max_concurrency=1)
+
+
+def test_run_finders_partial_backend_error_does_not_raise():
+    import httpx
+    from kagura_code_review.review.harness import run_finders
+    tier = EffortTier("t", ["correctness-linescan", "cross-file"], repeats=1,
+                      verify_votes=1, verify_votes_correctness=1, max_findings=10)
+
+    class Mixed:
+        def __init__(self):
+            self.n = 0
+
+        def chat(self, messages, tools=None):
+            self.n += 1
+            if self.n == 1:
+                raise httpx.ConnectError("refused")
+            return _submit([_finding("a.py", 1, "A")])
+
+    candidates, any_errored = run_finders(Mixed(), StubRepo(), "d", None, tier,
+                                          max_iters=3, max_concurrency=1)
+    assert any_errored is True
+    assert len(candidates) == 1
