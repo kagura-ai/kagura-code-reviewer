@@ -1,0 +1,59 @@
+import json
+
+from kagura_code_review.agent import ChatMessage, ToolCall
+from kagura_code_review.report import Severity
+from kagura_code_review.review.skill import review
+
+
+class ScriptedClient:
+    def __init__(self, scripted):
+        self._scripted = scripted
+        self.calls = 0
+
+    def chat(self, messages, tools=None):
+        msg = self._scripted[self.calls]
+        self.calls += 1
+        return msg
+
+
+class StubRepo:
+    def read_file(self, path, max_bytes=20000):
+        return "file contents"
+
+    def grep(self, pattern, max_results=50):
+        return "no matches"
+
+    def list_files(self, subdir="."):
+        return ["a.py"]
+
+
+def test_review_returns_report_from_submit(monkeypatch):
+    payload = {"findings": [
+        {"dimension": "security", "severity": "high", "file": "a.py",
+         "line": 5, "title": "issue", "rationale": "why", "suggestion": "fix"}
+    ]}
+    scripted = [
+        ChatMessage(content=None, tool_calls=[ToolCall("1", "submit_findings", json.dumps(payload))]),
+    ]
+    report = review(ScriptedClient(scripted), StubRepo(), diff="--- diff ---", context=None)
+    assert report.findings[0].severity is Severity.HIGH
+    assert report.exit_code() == 1
+
+
+def test_review_degrades_on_exhaustion():
+    scripted = [ChatMessage(content=None, tool_calls=[ToolCall("1", "read_file", '{"path":"a.py"}')])] * 30
+    report = review(ScriptedClient(scripted), StubRepo(), diff="d", context=None, max_iters=3)
+    assert any(f.severity is Severity.INFO for f in report.findings)
+
+
+def test_context_is_included_in_messages():
+    captured = {}
+
+    class CaptureClient(ScriptedClient):
+        def chat(self, messages, tools=None):
+            captured["messages"] = messages
+            return ChatMessage(content=None, tool_calls=[ToolCall("1", "submit_findings", '{"findings": []}')])
+
+    review(CaptureClient([]), StubRepo(), diff="d", context="REMEMBERED-RULE")
+    joined = json.dumps(captured["messages"])
+    assert "REMEMBERED-RULE" in joined
