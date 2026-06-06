@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import IntEnum
 
 
@@ -32,6 +32,9 @@ class Finding:
     title: str
     rationale: str
     suggestion: str
+    angles: list[str] = field(default_factory=list)
+    votes: dict = field(default_factory=dict)
+    merge_count: int = 1
 
     def to_dict(self) -> dict:
         return {

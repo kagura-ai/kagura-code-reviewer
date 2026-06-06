@@ -39,3 +39,18 @@ def test_json_roundtrips_severity_as_name():
     data = json.loads(r.to_json())
     assert data["findings"][0]["severity"] == "MEDIUM"
     assert data["findings"][0]["line"] is None
+
+
+def test_finding_has_optional_provenance_defaults():
+    f = Finding("correctness", Severity.HIGH, "a.py", 5, "t", "r", "s")
+    assert f.angles == []
+    assert f.votes == {}
+    assert f.merge_count == 1
+
+
+def test_finding_accepts_provenance():
+    f = Finding("correctness", Severity.HIGH, "a.py", 5, "t", "r", "s",
+                angles=["cross-file"], votes={"CONFIRMED": 2}, merge_count=3)
+    assert f.angles == ["cross-file"]
+    assert f.votes == {"CONFIRMED": 2}
+    assert f.merge_count == 3

@@ -8,9 +8,9 @@ import httpx
 import openai
 import typer
 
-from .config import resolve_model
+from .config import load_config, resolve_model
 from .ollama_client import OllamaClient
-from .review.skill import review
+from .review.harness import resolve_tier, review_harness
 from .tools import RepoTools
 
 app = typer.Typer(add_completion=False, help="Cost-free Ollama code review.")
@@ -19,6 +19,12 @@ app = typer.Typer(add_completion=False, help="Cost-free Ollama code review.")
 class OutputFormat(str, Enum):
     md = "md"
     json = "json"
+
+
+class Effort(str, Enum):
+    low = "low"
+    med = "med"
+    high = "high"
 
 
 def client_factory(spec, timeout: float):
@@ -43,6 +49,7 @@ def main(
     out: Path = typer.Option(None, help="Write the report to this file."),
     timeout: float = typer.Option(120.0, help="Per-call timeout (seconds)."),
     max_iters: int = typer.Option(12, help="Max agent iterations."),
+    effort: Effort = typer.Option(Effort.med, "--effort", help="Review effort: low|med|high."),
     doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
     spec = resolve_model(model, local=local)
@@ -68,8 +75,12 @@ def main(
     context = context_file.read_text() if context_file and context_file.is_file() else None
     client = client_factory(spec, timeout)
 
+    tier = resolve_tier(effort.value, config=load_config())
     try:
-        report = review(client, tools, diff=diff, context=context, max_iters=max_iters)
+        report = review_harness(
+            client, client, tools, diff=diff, context=context,
+            tier=tier, max_iters=max_iters,
+        )
     except (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError) as exc:
         typer.echo(
             f"Ollama request failed: {exc}\n"

@@ -70,6 +70,28 @@ def _build_tools(repo) -> list[Tool]:
     ]
 
 
+_VERDICT_SCHEMA = {
+    "type": "object",
+    "properties": {"verdict": {"type": "string"}, "reason": {"type": "string"}},
+    "required": ["verdict"],
+}
+
+
+def build_verifier_tools(repo) -> list[Tool]:
+    """Read tools + a terminal submit_verdict tool for the verify stage."""
+    tools = _build_tools(repo)[:-1]  # drop submit_findings, keep read/grep/list
+    tools.append(
+        Tool(
+            "submit_verdict",
+            "Submit the verdict for the candidate finding.",
+            _VERDICT_SCHEMA,
+            lambda a: "verdict recorded",
+            terminal=True,
+        )
+    )
+    return tools
+
+
 def build_messages(diff: str, context: str | None) -> list[dict]:
     user = ["Review the following git diff.\n", "=== DIFF ===\n", diff]
     if context:

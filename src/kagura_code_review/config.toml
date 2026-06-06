@@ -9,3 +9,14 @@ num_ctx = 32768
 ollama_model = "qwen2.5-coder:7b"
 base_url = "http://localhost:11434/v1"
 num_ctx = 16384
+
+# Review effort tiers. These override the built-in defaults in
+# review/harness.py (_DEFAULT_TIERS). Only the fields you set are overridden.
+[effort.low]
+max_findings = 8
+
+[effort.med]
+max_findings = 10
+
+[effort.high]
+max_findings = 12
