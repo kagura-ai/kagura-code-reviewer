@@ -1,0 +1,11 @@
+default_alias = "review-cloud"
+
+[models.review-cloud]
+ollama_model = "qwen3-coder:480b-cloud"
+base_url = "http://localhost:11434/v1"
+num_ctx = 32768
+
+[models.review-local]
+ollama_model = "qwen2.5-coder:7b"
+base_url = "http://localhost:11434/v1"
+num_ctx = 16384
