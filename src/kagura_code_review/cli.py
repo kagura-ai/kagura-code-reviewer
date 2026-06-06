@@ -4,6 +4,8 @@ import subprocess
 from enum import Enum
 from pathlib import Path
 
+import httpx
+import openai
 import typer
 
 from .config import resolve_model
@@ -41,7 +43,18 @@ def main(
     out: Path = typer.Option(None, help="Write the report to this file."),
     timeout: float = typer.Option(120.0, help="Per-call timeout (seconds)."),
     max_iters: int = typer.Option(12, help="Max agent iterations."),
+    doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
+    spec = resolve_model(model, local=local)
+
+    if doctor:
+        from . import doctor as _doctor
+        results = [_doctor.check_ollama(spec.base_url), _doctor.check_model(spec.base_url, spec.ollama_model)]
+        for r in results:
+            mark = "OK " if r.ok else "FAIL"
+            typer.echo(f"[{mark}] {r.name}: {r.detail}")
+        raise typer.Exit(code=0 if all(r.ok for r in results) else 1)
+
     tools = RepoTools(repo)
     try:
         diff = tools.git_diff(base, head, paths or None)
@@ -53,10 +66,19 @@ def main(
         raise typer.Exit(code=0)
 
     context = context_file.read_text() if context_file and context_file.is_file() else None
-    spec = resolve_model(model, local=local)
     client = client_factory(spec, timeout)
 
-    report = review(client, tools, diff=diff, context=context, max_iters=max_iters)
+    try:
+        report = review(client, tools, diff=diff, context=context, max_iters=max_iters)
+    except (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError) as exc:
+        typer.echo(
+            f"Ollama request failed: {exc}\n"
+            f"Is the ollama daemon running and is model '{spec.ollama_model}' pulled? "
+            f"Try: kagura-code-review --doctor",
+            err=True,
+        )
+        raise typer.Exit(code=3)
+
     rendered = report.to_json() if fmt is OutputFormat.json else report.to_markdown()
 
     if out:

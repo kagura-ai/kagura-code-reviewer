@@ -76,8 +76,9 @@ kagura-code-review --base main --paths src/foo.py --paths tests/test_foo.py
 Install the shipped slash command into your project's `.claude/commands/` directory:
 
 ```bash
-cp "$(python -c 'import kagura_code_review, pathlib; print(pathlib.Path(kagura_code_review.__file__).parent)')/kagura-code-review.md" \
-   .claude/commands/kagura-code-review.md
+# Copy the shipped slash command into your project so Claude Code can run /kagura-code-review
+mkdir -p .claude/commands
+cp "$(python -c "import kagura_code_review, pathlib; print(pathlib.Path(kagura_code_review.__file__).parent / 'commands' / 'kagura-code-review.md')")" .claude/commands/
 ```
 
 Then inside Claude Code, run:

@@ -81,3 +81,29 @@ def test_cli_rejects_invalid_format(repo: Path, monkeypatch):
         ["--base", "HEAD~1", "--repo", str(repo), "--format", "xml"],
     )
     assert result.exit_code != 0
+
+
+def test_cli_handles_ollama_failure(repo: Path, monkeypatch):
+    import httpx
+
+    class BoomClient:
+        def chat(self, messages, tools=None):
+            raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: BoomClient())
+    runner = CliRunner()
+    result = runner.invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
+    assert result.exit_code == 3
+    assert "Ollama request failed" in result.output
+
+
+def test_cli_doctor_flag(monkeypatch, tmp_path: Path):
+    from kagura_code_review import doctor as doctor_mod
+    from kagura_code_review.doctor import CheckResult
+
+    monkeypatch.setattr(doctor_mod, "check_ollama", lambda base_url: CheckResult("ollama daemon", True, "ok"))
+    monkeypatch.setattr(doctor_mod, "check_model", lambda base_url, model: CheckResult(f"model {model}", True, "pulled"))
+    runner = CliRunner()
+    result = runner.invoke(cli_mod.app, ["--doctor"])
+    assert result.exit_code == 0
+    assert "ollama daemon" in result.output
