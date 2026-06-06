@@ -97,3 +97,37 @@ def test_angle_catalog_has_seven_angles():
 def test_correctness_angles_subset():
     assert CORRECTNESS_ANGLES == {"correctness-linescan", "removed-behavior", "cross-file"}
     assert CORRECTNESS_ANGLES <= set(ANGLE_PROMPTS)
+
+
+# ---- single-angle finder -------------------------------------------------
+
+def test_run_finder_returns_findings_with_angle_provenance():
+    from kagura_code_review.review.harness import FinderOutcome, run_finder
+    finding = _finding("a.py", 5, "bug", "high")
+    out = run_finder(ScriptedClient([_submit([finding])]), StubRepo(),
+                     diff="d", context=None, angle="cross-file", max_iters=4)
+    assert isinstance(out, FinderOutcome)
+    assert out.errored is False
+    assert len(out.findings) == 1
+    assert out.findings[0].angles == ["cross-file"]
+
+
+def test_run_finder_without_submit_contributes_nothing():
+    from kagura_code_review.review.harness import run_finder
+    loop = ChatMessage(content=None, tool_calls=[ToolCall("1", "read_file", '{"path":"a.py"}')])
+    out = run_finder(ScriptedClient([loop] * 30), StubRepo(),
+                     diff="d", context=None, angle="reuse", max_iters=3)
+    assert out.findings == []
+    assert out.errored is False
+
+
+def test_run_finder_marks_errored_on_exception():
+    from kagura_code_review.review.harness import run_finder
+
+    class Boom:
+        def chat(self, messages, tools=None):
+            raise RuntimeError("backend down")
+    out = run_finder(Boom(), StubRepo(), diff="d", context=None,
+                     angle="reuse", max_iters=3)
+    assert out.findings == []
+    assert out.errored is True
