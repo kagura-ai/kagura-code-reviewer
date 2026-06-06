@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 
 from ..agent import run_agent
-from ..report import Report
+from ..report import Finding, Report, Severity
 from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
 from .skill import _build_tools, build_messages, build_verifier_tools
 
@@ -171,3 +171,33 @@ def aggregate(findings: list, max_findings: int) -> list:
         reverse=True,
     )
     return ranked[:max_findings]
+
+
+def _verify_votes_for(finding, tier: EffortTier) -> int:
+    return tier.verify_votes_correctness if _is_correctness(finding) else tier.verify_votes
+
+
+def review_harness(finder_client, verifier_client, repo, diff, context, tier,
+                   max_iters=12, max_concurrency=1) -> Report:
+    candidates, any_errored = run_finders(
+        finder_client, repo, diff, context, tier, max_iters, max_concurrency)
+    deduped = dedup(candidates)
+
+    survivors = []
+    for cand in deduped:
+        keep, tally = verify_candidate(
+            verifier_client, repo, diff, cand, _verify_votes_for(cand, tier), max_iters)
+        if keep:
+            cand.votes = tally
+            survivors.append(cand)
+
+    findings = aggregate(survivors, tier.max_findings)
+
+    if not findings and any_errored:
+        return Report(findings=[Finding(
+            dimension="meta", severity=Severity.HIGH, file="", line=None,
+            title="Review incomplete",
+            rationale="One or more finder angles failed and no findings were produced.",
+            suggestion="Re-run, check the Ollama backend, or lower --effort.",
+        )])
+    return Report(findings=findings)

@@ -258,3 +258,58 @@ def test_aggregate_orders_by_severity_within_correctness():
     ]
     out = aggregate(items, max_findings=10)
     assert [f.severity for f in out] == [Severity.CRITICAL, Severity.LOW]
+
+
+# ---- review_harness end-to-end -------------------------------------------
+
+def test_review_harness_end_to_end_keeps_confirmed_finding():
+    from kagura_code_review.review.harness import review_harness
+    tier = EffortTier("t", ["correctness-linescan"], repeats=1,
+                      verify_votes=1, verify_votes_correctness=1, max_findings=10)
+
+    class Client:
+        def __init__(self):
+            self.n = 0
+
+        def chat(self, messages, tools=None):
+            self.n += 1
+            tool_names = {t["function"]["name"] for t in (tools or [])}
+            if "submit_findings" in tool_names:
+                return _submit([_finding("a.py", 1, "real bug", "high")])
+            return _verdict("CONFIRMED")
+
+    report = review_harness(Client(), Client(), StubRepo(), diff="d", context=None,
+                            tier=tier, max_iters=4, max_concurrency=1)
+    assert isinstance(report, Report)
+    assert len(report.findings) == 1
+    assert report.exit_code() == 1
+
+
+def test_review_harness_blocks_when_all_finders_error():
+    from kagura_code_review.review.harness import review_harness
+    tier = EffortTier("t", ["reuse"], repeats=1, verify_votes=1,
+                      verify_votes_correctness=1, max_findings=10)
+
+    class Boom:
+        def chat(self, messages, tools=None):
+            raise RuntimeError("down")
+
+    report = review_harness(Boom(), Boom(), StubRepo(), diff="d", context=None,
+                            tier=tier, max_iters=3, max_concurrency=1)
+    assert report.exit_code() == 1
+    assert any(f.dimension == "meta" for f in report.findings)
+
+
+def test_review_harness_clean_pass_when_no_findings_no_errors():
+    from kagura_code_review.review.harness import review_harness
+    tier = EffortTier("t", ["reuse"], repeats=1, verify_votes=1,
+                      verify_votes_correctness=1, max_findings=10)
+
+    class CleanClient:
+        def chat(self, messages, tools=None):
+            return _submit([])
+
+    report = review_harness(CleanClient(), CleanClient(), StubRepo(), diff="d",
+                            context=None, tier=tier, max_iters=4, max_concurrency=1)
+    assert report.findings == []
+    assert report.exit_code() == 0
