@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 
 from ..agent import run_agent
 from ..report import Report
-from .angles import ANGLE_PROMPTS
+from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
 from .skill import _build_tools, build_messages, build_verifier_tools
 
 _ALL_ANGLES = [
@@ -155,3 +155,19 @@ def verify_candidate(client, repo, diff, finding, votes, max_iters=6):
     kept = tally.get("CONFIRMED", 0) + tally.get("PLAUSIBLE", 0)
     refuted = tally.get("REFUTED", 0)
     return (kept >= refuted), tally
+
+
+_CORRECTNESS_DIMS = {"correctness", "security"}
+
+
+def _is_correctness(f) -> bool:
+    return f.dimension in _CORRECTNESS_DIMS or bool(set(f.angles) & CORRECTNESS_ANGLES)
+
+
+def aggregate(findings: list, max_findings: int) -> list:
+    ranked = sorted(
+        findings,
+        key=lambda f: (_is_correctness(f), int(f.severity), f.merge_count),
+        reverse=True,
+    )
+    return ranked[:max_findings]

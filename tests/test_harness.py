@@ -235,3 +235,26 @@ def test_verify_all_errors_keeps_low_confidence():
     keep, votes = verify_candidate(Boom(), StubRepo(), "d", cand, votes=2)
     assert keep is True
     assert votes.get("ERROR") == 2
+
+
+# ---- aggregate -----------------------------------------------------------
+
+def test_aggregate_correctness_outranks_cleanup_and_caps():
+    from kagura_code_review.review.harness import aggregate
+    items = [
+        Finding("simplification", Severity.HIGH, "a.py", 1, "cleanup", "r", "s"),
+        Finding("correctness", Severity.MEDIUM, "b.py", 2, "bug", "r", "s"),
+    ]
+    out = aggregate(items, max_findings=1)
+    assert len(out) == 1
+    assert out[0].dimension == "correctness"
+
+
+def test_aggregate_orders_by_severity_within_correctness():
+    from kagura_code_review.review.harness import aggregate
+    items = [
+        Finding("correctness", Severity.LOW, "a.py", 1, "low", "r", "s"),
+        Finding("correctness", Severity.CRITICAL, "b.py", 2, "crit", "r", "s"),
+    ]
+    out = aggregate(items, max_findings=10)
+    assert [f.severity for f in out] == [Severity.CRITICAL, Severity.LOW]
