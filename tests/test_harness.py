@@ -1,4 +1,89 @@
+import json
+
+from kagura_code_review.agent import ChatMessage, ToolCall
+from kagura_code_review.report import Finding, Report, Severity
 from kagura_code_review.review.angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
+from kagura_code_review.review.harness import EffortTier, resolve_tier
+
+
+# ---- shared test doubles -------------------------------------------------
+
+class StubRepo:
+    def read_file(self, path, max_bytes=20000):
+        return "file contents"
+
+    def grep(self, pattern, max_results=50):
+        return "no matches"
+
+    def list_files(self, subdir="."):
+        return ["a.py"]
+
+
+def _submit(findings):
+    return ChatMessage(
+        content=None,
+        tool_calls=[ToolCall("1", "submit_findings", json.dumps({"findings": findings}))],
+    )
+
+
+def _verdict(v):
+    return ChatMessage(
+        content=None,
+        tool_calls=[ToolCall("1", "submit_verdict", json.dumps({"verdict": v}))],
+    )
+
+
+def _finding(file, line, title, sev="medium", dim="correctness"):
+    return {"dimension": dim, "severity": sev, "file": file, "line": line,
+            "title": title, "rationale": "r", "suggestion": "s"}
+
+
+def _F(file, line, title, sev=Severity.MEDIUM, angle="x"):
+    return Finding("correctness", sev, file, line, title, "r", "s", angles=[angle])
+
+
+class ScriptedClient:
+    def __init__(self, scripted):
+        self._scripted = scripted
+        self.calls = 0
+
+    def chat(self, messages, tools=None):
+        msg = self._scripted[self.calls]
+        self.calls += 1
+        return msg
+
+
+class SeqClient:
+    """Returns the next scripted message on each chat() call."""
+    def __init__(self, msgs):
+        self._msgs = list(msgs)
+        self.calls = 0
+
+    def chat(self, messages, tools=None):
+        m = self._msgs[self.calls]
+        self.calls += 1
+        return m
+
+
+# ---- tier resolution -----------------------------------------------------
+
+def test_resolve_default_tiers():
+    low, med, high = resolve_tier("low"), resolve_tier("med"), resolve_tier("high")
+    assert med.repeats == 1 and med.max_findings == 10
+    assert len(low.angles) == 3 and len(med.angles) == 5 and len(high.angles) == 7
+    assert high.repeats == 2 and high.verify_votes == 3
+    assert med.verify_votes == 1 and med.verify_votes_correctness == 2
+
+
+def test_resolve_unknown_tier_defaults_to_med():
+    assert resolve_tier("bogus").name == "med"
+
+
+def test_resolve_tier_config_override():
+    cfg = {"effort": {"med": {"max_findings": 99}}}
+    assert resolve_tier("med", config=cfg).max_findings == 99
+    assert resolve_tier("med", config=cfg).repeats == 1
+
 
 
 def test_angle_catalog_has_seven_angles():
