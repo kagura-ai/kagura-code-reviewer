@@ -107,3 +107,23 @@ def test_cli_doctor_flag(monkeypatch, tmp_path: Path):
     result = runner.invoke(cli_mod.app, ["--doctor"])
     assert result.exit_code == 0
     assert "ollama daemon" in result.output
+
+
+def test_cli_effort_option_invokes_harness(repo: Path, monkeypatch):
+    from kagura_code_review.report import Report
+    captured = {}
+
+    def fake_harness(finder_client, verifier_client, repo_, diff, context, tier,
+                     max_iters=12, max_concurrency=1):
+        captured["tier"] = tier.name
+        return Report(findings=[])
+
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: object())
+    monkeypatch.setattr(cli_mod, "review_harness", fake_harness, raising=False)
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_mod.app,
+        ["--base", "HEAD~1", "--repo", str(repo), "--effort", "high"],
+    )
+    assert result.exit_code == 0
+    assert captured["tier"] == "high"
