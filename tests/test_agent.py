@@ -51,6 +51,27 @@ def test_terminal_tool_ends_loop_immediately():
     assert result.terminal_payload == {"findings": []}
 
 
+def test_terminal_tool_with_malformed_json_does_not_finish_clean():
+    """A malformed submit_findings call must not be treated as a clean submission.
+
+    Regression: bad JSON args were silently coerced to {} and returned as a
+    terminal_payload, which the report layer rendered as 'No issues found'."""
+    submitted: list = []
+
+    def submit(args: dict) -> str:
+        submitted.append(args)
+        return "recorded"
+
+    terminal = Tool("submit", "submit", {"type": "object"}, submit, terminal=True)
+    scripted = [
+        ChatMessage(content=None, tool_calls=[ToolCall("1", "submit", "{bad json")]),
+        ChatMessage(content="recovered", tool_calls=[]),
+    ]
+    result = run_agent(FakeClient(scripted), [], [terminal])
+    assert result.terminal_payload is None
+    assert submitted == []
+
+
 def test_unknown_tool_does_not_crash():
     scripted = [
         ChatMessage(content=None, tool_calls=[ToolCall("1", "ghost", "{}")]),

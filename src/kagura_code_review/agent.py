@@ -82,17 +82,23 @@ def run_agent(
             tool = tool_map.get(tc.name)
             try:
                 args = json.loads(tc.arguments or "{}")
+                parse_ok = True
             except json.JSONDecodeError:
                 args = {}
+                parse_ok = False
             if tool is None:
                 result = f"error: unknown tool {tc.name}"
+            elif not parse_ok:
+                # Don't let a malformed call masquerade as a real one — feed the
+                # error back so the model retries instead of silently finishing.
+                result = f"error: arguments for {tc.name} were not valid JSON; resend with valid JSON"
             else:
                 try:
                     result = tool.handler(args)
                 except Exception as exc:  # tool failures are fed back, not fatal
                     result = f"error: {exc}"
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
-            if tool is not None and tool.terminal:
+            if tool is not None and tool.terminal and parse_ok:
                 return AgentResult(final_text=msg.content, terminal_payload=args)
 
     return AgentResult(exhausted=True)

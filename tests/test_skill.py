@@ -40,10 +40,13 @@ def test_review_returns_report_from_submit(monkeypatch):
     assert report.exit_code() == 1
 
 
-def test_review_degrades_on_exhaustion():
+def test_review_exhaustion_is_blocking():
+    """An incomplete review (no findings submitted within the budget) must NOT
+    pass the gate — it exits non-zero so CI cannot mistake it for a clean run."""
     scripted = [ChatMessage(content=None, tool_calls=[ToolCall("1", "read_file", '{"path":"a.py"}')])] * 30
     report = review(ScriptedClient(scripted), StubRepo(), diff="d", context=None, max_iters=3)
-    assert any(f.severity is Severity.INFO for f in report.findings)
+    assert report.findings  # a meta finding is reported
+    assert report.exit_code() == 1
 
 
 def test_context_is_included_in_messages():

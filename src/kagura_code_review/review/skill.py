@@ -90,7 +90,8 @@ def review(client, repo, diff: str, context: str | None = None, max_iters: int =
         findings=[
             Finding(
                 dimension="meta",
-                severity=Severity.INFO,
+                # Blocking: an incomplete review must not pass the merge gate.
+                severity=Severity.HIGH,
                 file="",
                 line=None,
                 title="Review incomplete",
