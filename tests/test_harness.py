@@ -196,3 +196,42 @@ def test_dedup_distinct_lines_not_merged():
     from kagura_code_review.review.harness import dedup
     items = [_F("a.py", 1, "bug"), _F("a.py", 100, "bug")]
     assert len(dedup(items, bucket=5)) == 2
+
+
+# ---- verifier ------------------------------------------------------------
+
+def test_verify_keeps_when_confirmed_plausible_ge_refuted():
+    from kagura_code_review.review.harness import verify_candidate
+    cand = _F("a.py", 1, "bug")
+    client = SeqClient([_verdict("REFUTED"), _verdict("PLAUSIBLE"), _verdict("CONFIRMED")])
+    keep, votes = verify_candidate(client, StubRepo(), "d", cand, votes=3)
+    assert keep is True
+    assert votes == {"REFUTED": 1, "PLAUSIBLE": 1, "CONFIRMED": 1}
+
+
+def test_verify_drops_when_refuted_majority():
+    from kagura_code_review.review.harness import verify_candidate
+    cand = _F("a.py", 1, "bug")
+    client = SeqClient([_verdict("REFUTED"), _verdict("REFUTED"), _verdict("PLAUSIBLE")])
+    keep, _ = verify_candidate(client, StubRepo(), "d", cand, votes=3)
+    assert keep is False
+
+
+def test_verify_tie_survives():
+    from kagura_code_review.review.harness import verify_candidate
+    cand = _F("a.py", 1, "bug")
+    client = SeqClient([_verdict("REFUTED"), _verdict("CONFIRMED")])
+    keep, _ = verify_candidate(client, StubRepo(), "d", cand, votes=2)
+    assert keep is True
+
+
+def test_verify_all_errors_keeps_low_confidence():
+    from kagura_code_review.review.harness import verify_candidate
+    cand = _F("a.py", 1, "bug")
+
+    class Boom:
+        def chat(self, messages, tools=None):
+            raise RuntimeError("down")
+    keep, votes = verify_candidate(Boom(), StubRepo(), "d", cand, votes=2)
+    assert keep is True
+    assert votes.get("ERROR") == 2

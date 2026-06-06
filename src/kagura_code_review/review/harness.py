@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from ..agent import run_agent
 from ..report import Report
 from .angles import ANGLE_PROMPTS
-from .skill import _build_tools, build_messages
+from .skill import _build_tools, build_messages, build_verifier_tools
 
 _ALL_ANGLES = [
     "correctness-linescan", "removed-behavior", "cross-file",
@@ -117,3 +117,41 @@ def dedup(findings: list, bucket: int = 5) -> list:
             f.angles = existing.angles
             groups[key] = f
     return list(groups.values())
+
+
+_VALID_VERDICTS = {"CONFIRMED", "PLAUSIBLE", "REFUTED"}
+
+_VERIFIER_SYSTEM = (
+    "You are an adversarial reviewer. Try to REFUTE the candidate finding using "
+    "the tools to read the code. Reply CONFIRMED only if clearly real, REFUTED "
+    "only if you can show it is wrong/impossible/already handled, otherwise "
+    "PLAUSIBLE. Default to PLAUSIBLE when the failing state is realistic. Call "
+    "submit_verdict exactly once with verdict=CONFIRMED|PLAUSIBLE|REFUTED."
+)
+
+
+def _one_verdict(client, repo, diff, finding, max_iters) -> str:
+    loc = f"{finding.file}:{finding.line}" if finding.line is not None else finding.file
+    user = (f"Candidate finding at {loc}\nTitle: {finding.title}\n"
+            f"Why: {finding.rationale}\n\n=== DIFF ===\n{diff}")
+    messages = [{"role": "system", "content": _VERIFIER_SYSTEM},
+                {"role": "user", "content": user}]
+    try:
+        result = run_agent(client, messages, build_verifier_tools(repo), max_iters=max_iters)
+    except Exception:
+        return "ERROR"
+    payload = result.terminal_payload or {}
+    verdict = str(payload.get("verdict", "")).strip().upper()
+    return verdict if verdict in _VALID_VERDICTS else "PLAUSIBLE"
+
+
+def verify_candidate(client, repo, diff, finding, votes, max_iters=6):
+    tally: dict[str, int] = {}
+    for _ in range(votes):
+        v = _one_verdict(client, repo, diff, finding, max_iters)
+        tally[v] = tally.get(v, 0) + 1
+    if tally.get("ERROR", 0) == votes:
+        return True, tally
+    kept = tally.get("CONFIRMED", 0) + tally.get("PLAUSIBLE", 0)
+    refuted = tally.get("REFUTED", 0)
+    return (kept >= refuted), tally
