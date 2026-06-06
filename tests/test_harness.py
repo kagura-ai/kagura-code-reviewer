@@ -173,3 +173,26 @@ def test_run_finders_reports_any_errored():
                                           max_iters=3, max_concurrency=1)
     assert candidates == []
     assert any_errored is True
+
+
+# ---- dedup ---------------------------------------------------------------
+
+def test_dedup_collapses_near_duplicates_keeps_max_severity():
+    from kagura_code_review.review.harness import dedup
+    items = [
+        _F("a.py", 10, "Off by one error", Severity.MEDIUM, "linescan"),
+        _F("a.py", 12, "off-by-one error!", Severity.HIGH, "cross-file"),
+        _F("b.py", 1, "Different bug", Severity.LOW, "reuse"),
+    ]
+    out = dedup(items, bucket=5)
+    assert len(out) == 2
+    merged = next(f for f in out if f.file == "a.py")
+    assert merged.severity is Severity.HIGH
+    assert merged.merge_count == 2
+    assert set(merged.angles) == {"linescan", "cross-file"}
+
+
+def test_dedup_distinct_lines_not_merged():
+    from kagura_code_review.review.harness import dedup
+    items = [_F("a.py", 1, "bug"), _F("a.py", 100, "bug")]
+    assert len(dedup(items, bucket=5)) == 2

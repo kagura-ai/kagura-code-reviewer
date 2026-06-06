@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 
@@ -93,3 +94,26 @@ def run_finders(client, repo, diff, context, tier, max_iters=12, max_concurrency
     candidates = [f for o in outcomes for f in o.findings]
     any_errored = any(o.errored for o in outcomes)
     return candidates, any_errored
+
+
+def _norm_title(title: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", title.lower())
+
+
+def dedup(findings: list, bucket: int = 5) -> list:
+    groups: dict[tuple, object] = {}
+    for f in findings:
+        line_key = (f.line // bucket) if f.line is not None else -1
+        key = (f.file, line_key, _norm_title(f.title))
+        existing = groups.get(key)
+        if existing is None:
+            f.merge_count = 1
+            groups[key] = f
+            continue
+        existing.merge_count += 1
+        existing.angles = sorted(set(existing.angles) | set(f.angles))
+        if f.severity > existing.severity:
+            f.merge_count = existing.merge_count
+            f.angles = existing.angles
+            groups[key] = f
+    return list(groups.values())
