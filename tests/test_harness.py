@@ -131,3 +131,45 @@ def test_run_finder_marks_errored_on_exception():
                      angle="reuse", max_iters=3)
     assert out.findings == []
     assert out.errored is True
+
+
+# ---- ensemble runner -----------------------------------------------------
+
+class PerAngleClient:
+    """Returns a submit message keyed by the angle named in the system prompt."""
+    def __init__(self, by_angle):
+        self.by_angle = by_angle
+
+    def chat(self, messages, tools=None):
+        sys = messages[0]["content"]
+        angle = next(a for a in self.by_angle if a in sys)
+        return _submit(self.by_angle[angle])
+
+
+def test_run_finders_unions_across_angles_and_repeats():
+    from kagura_code_review.review.harness import run_finders
+    tier = EffortTier("t", ["correctness-linescan", "cross-file"], repeats=2,
+                      verify_votes=1, verify_votes_correctness=1, max_findings=10)
+    client = PerAngleClient({
+        "correctness-linescan": [_finding("a.py", 1, "A")],
+        "cross-file": [_finding("b.py", 2, "B")],
+    })
+    candidates, any_errored = run_finders(client, StubRepo(), "d", None, tier,
+                                          max_iters=4, max_concurrency=1)
+    assert len(candidates) == 4
+    assert any_errored is False
+    assert {c.file for c in candidates} == {"a.py", "b.py"}
+
+
+def test_run_finders_reports_any_errored():
+    from kagura_code_review.review.harness import run_finders
+    tier = EffortTier("t", ["reuse"], repeats=1, verify_votes=1,
+                      verify_votes_correctness=1, max_findings=10)
+
+    class Boom:
+        def chat(self, messages, tools=None):
+            raise RuntimeError("down")
+    candidates, any_errored = run_finders(Boom(), StubRepo(), "d", None, tier,
+                                          max_iters=3, max_concurrency=1)
+    assert candidates == []
+    assert any_errored is True

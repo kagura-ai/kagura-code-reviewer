@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 
 from ..agent import run_agent
@@ -74,3 +75,20 @@ def run_finder(client, repo, diff, context, angle, max_iters=12) -> FinderOutcom
     for f in findings:
         f.angles = [angle]
     return FinderOutcome(findings=findings)
+
+
+def run_finders(client, repo, diff, context, tier, max_iters=12, max_concurrency=1):
+    jobs = [angle for angle in tier.angles for _ in range(tier.repeats)]
+
+    def work(angle):
+        return run_finder(client, repo, diff, context, angle, max_iters)
+
+    if max_concurrency <= 1:
+        outcomes = [work(a) for a in jobs]
+    else:
+        with ThreadPoolExecutor(max_workers=max_concurrency) as ex:
+            outcomes = list(ex.map(work, jobs))
+
+    candidates = [f for o in outcomes for f in o.findings]
+    any_errored = any(o.errored for o in outcomes)
+    return candidates, any_errored
