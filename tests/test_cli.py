@@ -59,3 +59,25 @@ def test_cli_writes_json_out(repo: Path, monkeypatch, tmp_path: Path):
         ["--base", "HEAD~1", "--repo", str(repo), "--format", "json", "--out", str(out)],
     )
     assert "findings" in out.read_text()
+
+
+def test_cli_bad_ref_exits_cleanly(repo: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: FakeClient())
+    # CliRunner in this Typer version does not support mix_stderr; use output instead.
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_mod.app,
+        ["--base", "nonexistent-ref-xyz", "--repo", str(repo)],
+    )
+    assert result.exit_code == 2
+    assert "git diff failed" in result.output
+
+
+def test_cli_rejects_invalid_format(repo: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: FakeClient())
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_mod.app,
+        ["--base", "HEAD~1", "--repo", str(repo), "--format", "xml"],
+    )
+    assert result.exit_code != 0
