@@ -55,3 +55,15 @@ def test_git_diff_shows_change(repo: Path):
 def test_changed_files_lists_path(repo: Path):
     tools = RepoTools(repo)
     assert "a.py" in tools.changed_files("HEAD~1", "HEAD")
+
+
+def test_grep_does_not_follow_symlink_outside_repo(repo: Path):
+    outside = repo.parent / "outside_secret.txt"
+    outside.write_text("TOPSECRET_NEEDLE\n")
+    link = repo / "leak.txt"
+    link.symlink_to(outside)
+    subprocess.run(["git", "add", "leak.txt"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "commit", "-m", "add link"], cwd=repo, check=True, capture_output=True)
+    tools = RepoTools(repo)
+    out = tools.grep("TOPSECRET_NEEDLE")
+    assert "TOPSECRET_NEEDLE" not in out

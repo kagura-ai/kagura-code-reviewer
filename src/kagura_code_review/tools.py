@@ -38,7 +38,10 @@ class RepoTools:
         rx = re.compile(pattern)
         hits: list[str] = []
         for rel in self.list_files():
-            target = self.repo_root / rel
+            try:
+                target = self._resolve(rel)
+            except ValueError:
+                continue
             try:
                 for i, line in enumerate(target.read_text(errors="replace").splitlines(), 1):
                     if rx.search(line):
