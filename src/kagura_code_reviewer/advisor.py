@@ -46,3 +46,50 @@ def detect_hardware(vram_reader=_read_vram_mb, ram_reader=_read_ram_mb,
     ram = _safe(ram_reader, 0)
     cpu = _safe(cpu_reader, 1)
     return Hardware(vram_mb=vram, ram_mb=ram, cpu_threads=cpu, has_gpu=vram > 0)
+
+
+@dataclass
+class ModelCap:
+    review: float
+    tool_calling: str   # "good" | "fair" | "poor"
+    vram_mb: int        # approx footprint (0 for cloud)
+    ctx: int
+
+
+MODEL_CAPABILITIES: dict[str, ModelCap] = {
+    "qwen3.5:27b": ModelCap(0.85, "good", 17000, 32768),
+    "qwen3:30b": ModelCap(0.82, "good", 18000, 32768),
+    "qwen2.5-coder:14b": ModelCap(0.80, "good", 9000, 32768),
+    "qwen3:14b": ModelCap(0.74, "good", 9000, 32768),
+    "qwen2.5-coder:7b": ModelCap(0.55, "good", 5000, 16384),
+    "qwen3.5:9b": ModelCap(0.55, "fair", 6600, 16384),
+    "gemma4:31b": ModelCap(0.60, "fair", 19000, 8192),
+    "qwen3-coder:480b-cloud": ModelCap(0.95, "good", 0, 32768),
+    "qwen3.5:397b-cloud": ModelCap(0.93, "good", 0, 32768),
+}
+
+# Family-prefix fallbacks (matched by longest prefix before the default).
+_FAMILY_CAPS: dict[str, ModelCap] = {
+    "qwen2.5-coder": ModelCap(0.6, "good", 6000, 16384),
+    "qwen3.5": ModelCap(0.6, "good", 8000, 16384),
+    "qwen3-coder": ModelCap(0.9, "good", 0, 32768),
+    "qwen3": ModelCap(0.6, "good", 8000, 16384),
+    "gemma4": ModelCap(0.55, "fair", 12000, 8192),
+    "deepseek-r1": ModelCap(0.40, "poor", 9000, 8192),
+}
+
+_DEFAULT_CAP = ModelCap(0.3, "fair", 6000, 8192)
+
+
+def is_cloud(name: str) -> bool:
+    return "cloud" in name
+
+
+def lookup_cap(name: str) -> ModelCap:
+    if name in MODEL_CAPABILITIES:
+        return MODEL_CAPABILITIES[name]
+    family = name.split(":", 1)[0]
+    for prefix in sorted(_FAMILY_CAPS, key=len, reverse=True):
+        if family.startswith(prefix):
+            return _FAMILY_CAPS[prefix]
+    return _DEFAULT_CAP
