@@ -33,14 +33,10 @@ class OpenAICompatClient:
         }
         if self.seed is not None:
             kwargs["seed"] = self.seed
-        # num_ctx is an Ollama-specific option; omit for real OpenAI/Gemini (they 400 on it).
-        # NOTE: Ollama's OpenAI-compat endpoint (/v1/chat/completions) currently
-        # *ignores* options.num_ctx (verified on Ollama 0.20.2) — only the native
-        # /api/chat honors it. The loaded context is therefore set by
-        # OLLAMA_CONTEXT_LENGTH or the model's Modelfile, NOT this field. We still
-        # emit it (correct per the option spec, harmless, forward-compatible); the
-        # advisor uses ModelCap.ctx for its VRAM fit estimate rather than relying
-        # on this taking effect.
+        # num_ctx is an Ollama-style option; real OpenAI/Gemini 400 on it, so only
+        # send it when explicitly set. (The Ollama backend no longer uses this
+        # class — it uses the native /api/chat client, which honors num_ctx; the
+        # /v1 compat endpoint ignored it.)
         if self.num_ctx is not None:
             kwargs["extra_body"] = {"options": {"num_ctx": self.num_ctx}}
         if tools:

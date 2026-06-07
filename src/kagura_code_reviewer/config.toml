@@ -1,10 +1,9 @@
 default_alias = "review-cloud"
 
-# num_ctx below is ADVISORY: it feeds the advisor's VRAM-fit estimate, but it
-# does NOT change the context Ollama actually loads. Ollama's OpenAI-compat
-# endpoint ignores per-request num_ctx — set the real local context via the
-# OLLAMA_CONTEXT_LENGTH env var or the model's Modelfile. (See issue: native
-# /api/chat would honor num_ctx; tracked as a future enhancement.)
+# num_ctx sets the Ollama context window. The Ollama backend uses the native
+# /api/chat endpoint, which honors it (the OpenAI-compat /v1 endpoint did not),
+# so this value both drives the advisor's VRAM-fit estimate and the actual load.
+# Larger ctx = more VRAM; shrink it if a model offloads to CPU.
 
 [models.review-cloud]
 ollama_model = "qwen3-coder:480b-cloud"
