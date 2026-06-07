@@ -15,6 +15,9 @@ class Severity(IntEnum):
 
 BLOCKING = Severity.HIGH
 
+# Bump when the JSON report envelope changes shape, so actors can gate on it.
+SCHEMA_VERSION = 1
+
 
 def parse_severity(value: str) -> Severity:
     try:
@@ -92,11 +95,36 @@ class Report:
             )
         return cls(findings=out)
 
+    def verdict(self) -> str:
+        """Machine-readable gate verdict for downstream actors (couples to
+        exit_code): red = blocking finding present, yellow = non-blocking
+        findings only, green = clean."""
+        if any(f.severity >= BLOCKING for f in self.findings):
+            return "red"
+        return "yellow" if self.findings else "green"
+
     def exit_code(self) -> int:
-        return 1 if any(f.severity >= BLOCKING for f in self.findings) else 0
+        return 1 if self.verdict() == "red" else 0
+
+    def summary(self) -> dict:
+        by_severity: dict[str, int] = {}
+        for f in self.findings:
+            by_severity[f.severity.name] = by_severity.get(f.severity.name, 0) + 1
+        return {
+            "total": len(self.findings),
+            "blocking": sum(1 for f in self.findings if f.severity >= BLOCKING),
+            "by_severity": by_severity,
+            # a meta finding marks a review that did not complete cleanly
+            "incomplete": any(f.dimension == "meta" for f in self.findings),
+        }
 
     def to_json(self) -> str:
-        return json.dumps({"findings": [f.to_dict() for f in self.findings]}, indent=2)
+        return json.dumps({
+            "schema_version": SCHEMA_VERSION,
+            "verdict": self.verdict(),
+            "summary": self.summary(),
+            "findings": [f.to_dict() for f in self.findings],
+        }, indent=2)
 
     def to_markdown(self) -> str:
         if not self.findings:
