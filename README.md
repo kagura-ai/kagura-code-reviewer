@@ -1,5 +1,16 @@
 # kagura-code-reviewer
 
+<!-- Badges go live once the repo is on GitHub/PyPI. Replace OWNER with your GitHub org/user. -->
+[![PyPI](https://img.shields.io/pypi/v/kagura-code-reviewer.svg)](https://pypi.org/project/kagura-code-reviewer/)
+[![Python](https://img.shields.io/pypi/pyversions/kagura-code-reviewer.svg)](https://pypi.org/project/kagura-code-reviewer/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/OWNER/kagura-code-reviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/kagura-code-reviewer/actions/workflows/ci.yml)
+
+**Pro-grade code review on your git diff with zero Anthropic billing.** A local (or
+cloud) Ollama model fans out multi-angle finders, adversarially majority-vote
+verifies each one, dedups, and returns a ranked Markdown/JSON report with a
+`green` / `yellow` / `red` verdict you can gate CI on.
+
 Cost-free, Ollama-powered code review for Claude Code. The review "brain" runs on an Ollama model (cloud or local), so reviews consume **zero Anthropic billing**. A companion slash command (`/kagura-code-reviewer`) integrates with Kagura Memory: the outer Claude session retrieves past conventions and findings, passes them as context to the CLI, then writes durable knowledge back after the review. The CLI itself is a self-contained tool — it does not call Kagura Memory directly.
 
 ---
@@ -69,6 +80,23 @@ kagura-code-reviewer --base main --paths src/foo.py --paths tests/test_foo.py
 - `1` — one or more HIGH or CRITICAL findings
 - `2` — git error (bad refs, not a git repo, etc.)
 
+### Example output
+
+```markdown
+# Code Review
+
+## [CRITICAL] IndexError when orders is empty (correctness)
+- **Where:** `orders.py:14`
+- **Why:** latest_order accesses ordered[-1] without verifying the list is
+  non-empty, causing IndexError when orders is empty.
+- **Fix:** Guard the empty case before indexing.
+- **Seen by:** correctness-linescan, cross-file, removed-behavior ×5; votes: CONFIRMED 2; conf 1.00
+```
+
+Each finding carries provenance (`Seen by:` — which finder angles surfaced it),
+adversarial verify `votes`, and a `conf` score, so you can filter noise with
+`--min-confidence`.
+
 ### Machine-readable output contract
 
 `--format json` emits a stable, versioned envelope for downstream automation
@@ -104,7 +132,7 @@ Install the shipped slash command into your project's `.claude/commands/` direct
 ```bash
 # Copy the shipped slash command into your project so Claude Code can run /kagura-code-reviewer
 mkdir -p .claude/commands
-cp "$(python -c "import kagura_code_review, pathlib; print(pathlib.Path(kagura_code_review.__file__).parent / 'commands' / 'kagura-code-reviewer.md')")" .claude/commands/
+cp "$(python -c "import kagura_code_reviewer, pathlib; print(pathlib.Path(kagura_code_reviewer.__file__).parent / 'commands' / 'kagura-code-reviewer.md')")" .claude/commands/
 ```
 
 Then inside Claude Code, run:
@@ -188,6 +216,15 @@ Design spec: [`docs/superpowers/specs/2026-06-06-kagura-code-reviewer-design.md`
 
 ---
 
+## Contributing
+
+Issues and PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev
+setup and workflow, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). To report a
+security issue, follow [SECURITY.md](SECURITY.md) (please do not open a public
+issue for vulnerabilities).
+
+---
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache-2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
