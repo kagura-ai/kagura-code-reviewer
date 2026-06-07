@@ -55,3 +55,53 @@ def test_list_models_parses_tags(httpserver: HTTPServer):
 
 def test_list_models_returns_empty_on_error():
     assert list_models("http://127.0.0.1:9/v1") == []
+
+
+from kagura_code_reviewer.advisor import Recommendation, recommend
+
+_INSTALLED = [
+    "qwen3.5:27b", "qwen2.5-coder:14b", "qwen2.5-coder:7b",
+    "deepseek-r1:32b", "qwen3-coder:480b-cloud",
+]
+
+
+def test_recommend_picks_strongest_local_that_fits_24gb():
+    hw = Hardware(vram_mb=24564, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, _INSTALLED, prefer_local=True)
+    assert rec.finder == "qwen3.5:27b"
+    assert rec.verifier == "qwen3.5:27b"
+    assert rec.fits is True
+
+
+def test_recommend_excludes_models_over_vram_on_8gb():
+    hw = Hardware(vram_mb=8000, ram_mb=32000, cpu_threads=8, has_gpu=True)
+    rec = recommend(hw, _INSTALLED, prefer_local=True)
+    assert rec.finder == "qwen2.5-coder:7b"
+    assert rec.fits is True
+
+
+def test_recommend_ram_fallback_when_no_gpu():
+    hw = Hardware(vram_mb=0, ram_mb=40000, cpu_threads=16, has_gpu=False)
+    rec = recommend(hw, _INSTALLED, prefer_local=True)
+    assert rec.finder == "qwen3.5:27b"
+    assert rec.fits is False
+
+
+def test_recommend_excludes_poor_tool_calling():
+    hw = Hardware(vram_mb=24000, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, ["deepseek-r1:32b"], prefer_local=True)
+    assert rec.finder is None
+    assert "no suitable" in rec.reason.lower()
+
+
+def test_recommend_empty_installed():
+    hw = Hardware(vram_mb=24000, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, [], prefer_local=True)
+    assert rec.finder is None
+
+
+def test_recommend_cloud_mode_picks_best_cloud():
+    hw = Hardware(vram_mb=0, ram_mb=8000, cpu_threads=8, has_gpu=False)
+    rec = recommend(hw, _INSTALLED, prefer_local=False)
+    assert rec.finder == "qwen3-coder:480b-cloud"
+    assert rec.fits is True

@@ -106,3 +106,46 @@ def lookup_cap(name: str) -> ModelCap:
         if family.startswith(prefix):
             return _FAMILY_CAPS[prefix]
     return _DEFAULT_CAP
+
+
+@dataclass
+class Recommendation:
+    finder: str | None
+    verifier: str | None
+    reason: str
+    fits: bool
+
+
+_VRAM_SAFETY = 0.9
+
+
+def recommend(hardware: Hardware, installed: list[str], prefer_local: bool = True) -> Recommendation:
+    candidates = [
+        m for m in installed
+        if (is_cloud(m) != prefer_local) and lookup_cap(m).tool_calling != "poor"
+    ]
+    if not candidates:
+        kind = "local" if prefer_local else "cloud"
+        return Recommendation(
+            None, None,
+            f"no suitable {kind} model installed; pull one or use --cloud",
+            False,
+        )
+
+    if not prefer_local:
+        best = max(candidates, key=lambda m: lookup_cap(m).review)
+        cap = lookup_cap(best)
+        return Recommendation(best, best, f"cloud model {best} (aptitude {cap.review})", True)
+
+    usable_vram = hardware.vram_mb * _VRAM_SAFETY
+    fitting = [m for m in candidates if lookup_cap(m).vram_mb <= usable_vram]
+    if fitting:
+        pool, fits = fitting, True
+    else:
+        pool = [m for m in candidates if lookup_cap(m).vram_mb <= hardware.ram_mb] or candidates
+        fits = False
+    best = max(pool, key=lambda m: lookup_cap(m).review)
+    cap = lookup_cap(best)
+    where = "GPU VRAM" if fits else "system RAM (no GPU fit; slower)"
+    reason = f"local model {best} (aptitude {cap.review}, ~{cap.vram_mb} MB) fits {where}"
+    return Recommendation(best, best, reason, fits)
