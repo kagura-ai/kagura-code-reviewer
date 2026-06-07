@@ -40,7 +40,7 @@ class FakeClient:
 
 
 def test_cli_exits_nonzero_on_blocking(repo: Path, monkeypatch):
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: FakeClient())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient())
     runner = CliRunner()
     result = runner.invoke(
         cli_mod.app,
@@ -51,7 +51,7 @@ def test_cli_exits_nonzero_on_blocking(repo: Path, monkeypatch):
 
 
 def test_cli_writes_json_out(repo: Path, monkeypatch, tmp_path: Path):
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: FakeClient())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient())
     out = tmp_path / "r.json"
     runner = CliRunner()
     runner.invoke(
@@ -62,7 +62,7 @@ def test_cli_writes_json_out(repo: Path, monkeypatch, tmp_path: Path):
 
 
 def test_cli_bad_ref_exits_cleanly(repo: Path, monkeypatch):
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: FakeClient())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient())
     # CliRunner in this Typer version does not support mix_stderr; use output instead.
     runner = CliRunner()
     result = runner.invoke(
@@ -74,7 +74,7 @@ def test_cli_bad_ref_exits_cleanly(repo: Path, monkeypatch):
 
 
 def test_cli_rejects_invalid_format(repo: Path, monkeypatch):
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: FakeClient())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient())
     runner = CliRunner()
     result = runner.invoke(
         cli_mod.app,
@@ -90,7 +90,7 @@ def test_cli_handles_ollama_failure(repo: Path, monkeypatch):
         def chat(self, messages, tools=None):
             raise httpx.ConnectError("connection refused")
 
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: BoomClient())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: BoomClient())
     runner = CliRunner()
     result = runner.invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
     assert result.exit_code == 3
@@ -118,7 +118,7 @@ def test_cli_effort_option_invokes_harness(repo: Path, monkeypatch):
         captured["tier"] = tier.name
         return Report(findings=[])
 
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: object())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
     monkeypatch.setattr(cli_mod, "review_harness", fake_harness, raising=False)
     runner = CliRunner()
     result = runner.invoke(
@@ -154,7 +154,7 @@ def test_cli_zero_config_uses_advisor(repo: Path, monkeypatch):
             "qwen3.5:27b", "qwen3.5:27b", "fits GPU VRAM", True),
     )
 
-    def spy_factory(spec, timeout):
+    def spy_factory(spec, timeout, seed=None):
         captured["model"] = spec.ollama_model
         return object()
     monkeypatch.setattr(cli_mod, "client_factory", spy_factory)
@@ -168,7 +168,7 @@ def test_cli_zero_config_uses_advisor(repo: Path, monkeypatch):
 
 def test_cli_explicit_model_skips_advisor(repo: Path, monkeypatch):
     monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: object())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
     monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
 
     def boom_recommend(*a, **k):
@@ -182,7 +182,7 @@ def test_cli_explicit_model_skips_advisor(repo: Path, monkeypatch):
 
 def test_cli_advisor_none_exits_with_guidance(repo: Path, monkeypatch):
     monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
-    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: object())
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
     monkeypatch.setattr(
         cli_mod, "recommend",
         lambda hw, installed, prefer_local=True: Recommendation(None, None, "no suitable local model", False))
@@ -197,7 +197,7 @@ def test_cli_provider_openai_uses_compat_client(repo: Path, monkeypatch):
     monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-live")
 
-    def spy_build(provider, model, local, cloud, timeout):
+    def spy_build(provider, model, local, cloud, timeout, seed=None, auto=False):
         captured["provider"] = provider
         return object(), "gpt-4o"
     monkeypatch.setattr(cli_mod, "build_review_client", spy_build)
@@ -216,3 +216,16 @@ def test_cli_provider_missing_key_errors(repo: Path, monkeypatch):
                                               "--provider", "openai"])
     assert result.exit_code != 0
     assert "OPENAI_API_KEY" in result.output
+
+
+def test_cli_seed_threads_to_client(repo: Path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+
+    def spy_build(provider, model, local, cloud, timeout, seed=None, auto=False):
+        captured["seed"] = seed
+        return object(), "m"
+    monkeypatch.setattr(cli_mod, "build_review_client", spy_build)
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--seed", "7"])
+    assert result.exit_code == 0 and captured["seed"] == 7
