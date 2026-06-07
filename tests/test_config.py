@@ -14,6 +14,13 @@ def test_explicit_alias_resolves():
     assert spec.alias == "review-cloud"
 
 
+def test_review_local_is_a_reliable_tool_caller():
+    # review-local must drive the agentic review loop. qwen2.5-coder narrates
+    # instead of calling submit_findings (dogfood) -> default to a qwen3 model.
+    spec = resolve_model("review-local", local=True)
+    assert spec.ollama_model.startswith("qwen3")
+
+
 def test_unknown_alias_raises():
     with pytest.raises(KeyError):
         resolve_model("does-not-exist", local=False)

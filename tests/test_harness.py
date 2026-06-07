@@ -155,10 +155,10 @@ def test_run_finders_unions_across_angles_and_repeats():
         "correctness-linescan": [_finding("a.py", 1, "A")],
         "cross-file": [_finding("b.py", 2, "B")],
     })
-    candidates, any_errored = run_finders(client, StubRepo(), "d", None, tier,
-                                          max_iters=4, max_concurrency=1)
+    candidates, errors = run_finders(client, StubRepo(), "d", None, tier,
+                                     max_iters=4, max_concurrency=1)
     assert len(candidates) == 4
-    assert any_errored is False
+    assert errors == []
     assert {c.file for c in candidates} == {"a.py", "b.py"}
 
 
@@ -170,10 +170,10 @@ def test_run_finders_reports_any_errored():
     class Boom:
         def chat(self, messages, tools=None):
             raise RuntimeError("down")
-    candidates, any_errored = run_finders(Boom(), StubRepo(), "d", None, tier,
-                                          max_iters=3, max_concurrency=1)
+    candidates, errors = run_finders(Boom(), StubRepo(), "d", None, tier,
+                                     max_iters=3, max_concurrency=1)
     assert candidates == []
-    assert any_errored is True
+    assert [type(e).__name__ for e in errors] == ["RuntimeError"]
 
 
 # ---- dedup ---------------------------------------------------------------
@@ -301,6 +301,23 @@ def test_review_harness_blocks_when_all_finders_error():
     assert any(f.dimension == "meta" for f in report.findings)
 
 
+def test_review_harness_incomplete_names_the_error_type():
+    """The 'incomplete' meta finding must name the actual finder error so a
+    transient failure is diagnosable (not a generic 'something failed')."""
+    from kagura_code_reviewer.review.harness import review_harness
+    tier = EffortTier("t", ["reuse"], repeats=1, verify_votes=1,
+                      verify_votes_correctness=1, max_findings=10)
+
+    class Boom:
+        def chat(self, messages, tools=None):
+            raise ValueError("kaboom")
+
+    report = review_harness(Boom(), Boom(), StubRepo(), diff="d", context=None,
+                            tier=tier, max_iters=3, max_concurrency=1)
+    meta = next(f for f in report.findings if f.dimension == "meta")
+    assert "ValueError" in meta.rationale
+
+
 def test_review_harness_clean_pass_when_no_findings_no_errors():
     from kagura_code_reviewer.review.harness import review_harness
     tier = EffortTier("t", ["reuse"], repeats=1, verify_votes=1,
@@ -350,9 +367,9 @@ def test_run_finders_partial_backend_error_does_not_raise():
                 raise httpx.ConnectError("refused")
             return _submit([_finding("a.py", 1, "A")])
 
-    candidates, any_errored = run_finders(Mixed(), StubRepo(), "d", None, tier,
-                                          max_iters=3, max_concurrency=1)
-    assert any_errored is True
+    candidates, errors = run_finders(Mixed(), StubRepo(), "d", None, tier,
+                                     max_iters=3, max_concurrency=1)
+    assert len(errors) == 1
     assert len(candidates) == 1
 
 

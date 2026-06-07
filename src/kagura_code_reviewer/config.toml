@@ -10,8 +10,11 @@ ollama_model = "qwen3-coder:480b-cloud"
 base_url = "http://localhost:11434/v1"
 num_ctx = 32768
 
+# qwen3:8b (not qwen2.5-coder): the qwen2.5-coder family narrates findings as
+# prose instead of calling submit_findings in the review-agent loop (dogfood),
+# producing zero findings. qwen3 drives the agent reliably. ~5GB, low bar.
 [models.review-local]
-ollama_model = "qwen2.5-coder:7b"
+ollama_model = "qwen3:8b"
 base_url = "http://localhost:11434/v1"
 num_ctx = 16384
 
