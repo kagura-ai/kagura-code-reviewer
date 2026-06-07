@@ -364,3 +364,30 @@ def test_run_finder_survives_malformed_terminal_payload():
     out = run_finder(ScriptedClient([bad]), StubRepo(), diff="d", context=None,
                      angle="reuse", max_iters=4)
     assert out.findings == [] and out.errored is False
+
+
+def test_aggregate_filters_by_min_confidence_keeps_unknown():
+    from kagura_code_reviewer.review.harness import aggregate
+    lo = Finding("correctness", Severity.HIGH, "a.py", 1, "low", "r", "s", confidence=0.3)
+    hi = Finding("correctness", Severity.HIGH, "b.py", 2, "hi", "r", "s", confidence=0.9)
+    unk = Finding("correctness", Severity.HIGH, "c.py", 3, "unk", "r", "s", confidence=None)
+    out = aggregate([lo, hi, unk], max_findings=10, min_confidence=0.5)
+    titles = {f.title for f in out}
+    assert titles == {"hi", "unk"}  # 0.3 dropped, None kept
+
+
+def test_review_harness_sets_confidence_from_votes():
+    from kagura_code_reviewer.review.harness import review_harness
+    tier = EffortTier("t", ["correctness-linescan"], repeats=1,
+                      verify_votes=1, verify_votes_correctness=2, max_findings=10)
+
+    class Client:
+        def chat(self, messages, tools=None):
+            names = {t["function"]["name"] for t in (tools or [])}
+            if "submit_findings" in names:
+                return _submit([_finding("a.py", 1, "bug", "high")])
+            return _verdict("CONFIRMED")
+
+    report = review_harness(Client(), Client(), StubRepo(), diff="d", context=None,
+                            tier=tier, max_iters=4, max_concurrency=1)
+    assert report.findings[0].confidence == 1.0  # 2x CONFIRMED
