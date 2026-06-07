@@ -114,7 +114,7 @@ def test_cli_effort_option_invokes_harness(repo: Path, monkeypatch):
     captured = {}
 
     def fake_harness(finder_client, verifier_client, repo_, diff, context, tier,
-                     max_iters=12, max_concurrency=1):
+                     max_iters=12, max_concurrency=1, min_confidence=0.0):
         captured["tier"] = tier.name
         return Report(findings=[])
 
@@ -251,3 +251,21 @@ def test_cli_out_suppresses_stdout(repo: Path, monkeypatch, tmp_path):
     result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--out", str(out)])
     assert "bad" in out.read_text()
     assert "bad" not in result.stdout
+
+
+def test_cli_concurrency_and_min_confidence_threaded(repo: Path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
+
+    def fake_harness(fc, vc, repo_, diff, context, tier, max_iters=12,
+                     max_concurrency=1, min_confidence=0.0):
+        captured["concurrency"] = max_concurrency
+        captured["min_confidence"] = min_confidence
+        return Report(findings=[])
+    monkeypatch.setattr(cli_mod, "review_harness", fake_harness, raising=False)
+
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo),
+                                              "--concurrency", "4", "--min-confidence", "0.7"])
+    assert result.exit_code == 0
+    assert captured["concurrency"] == 4 and captured["min_confidence"] == 0.7

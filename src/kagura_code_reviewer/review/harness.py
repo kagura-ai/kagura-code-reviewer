@@ -8,7 +8,7 @@ import httpx
 import openai
 
 from ..agent import run_agent
-from ..report import Finding, Report, Severity
+from ..report import Finding, Report, Severity, confidence_from_votes
 from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
 from .skill import _build_tools, build_messages, build_verifier_tools
 
@@ -180,10 +180,13 @@ def _is_correctness(f) -> bool:
     return f.dimension in _CORRECTNESS_DIMS or bool(set(f.angles) & CORRECTNESS_ANGLES)
 
 
-def aggregate(findings: list, max_findings: int) -> list:
+def aggregate(findings: list, max_findings: int, min_confidence: float = 0.0) -> list:
+    # Drop low-confidence findings; keep unknown-confidence (unverified) ones.
+    kept = [f for f in findings if f.confidence is None or f.confidence >= min_confidence]
     ranked = sorted(
-        findings,
-        key=lambda f: (_is_correctness(f), int(f.severity), f.merge_count),
+        kept,
+        key=lambda f: (_is_correctness(f), int(f.severity),
+                       f.confidence if f.confidence is not None else 0.5, f.merge_count),
         reverse=True,
     )
     return ranked[:max_findings]
@@ -194,7 +197,7 @@ def _verify_votes_for(finding, tier: EffortTier) -> int:
 
 
 def review_harness(finder_client, verifier_client, repo, diff, context, tier,
-                   max_iters=12, max_concurrency=1) -> Report:
+                   max_iters=12, max_concurrency=1, min_confidence=0.0) -> Report:
     candidates, any_errored = run_finders(
         finder_client, repo, diff, context, tier, max_iters, max_concurrency)
     deduped = dedup(candidates)
@@ -205,9 +208,10 @@ def review_harness(finder_client, verifier_client, repo, diff, context, tier,
             verifier_client, repo, diff, cand, _verify_votes_for(cand, tier), max_iters)
         if keep:
             cand.votes = tally
+            cand.confidence = confidence_from_votes(tally)
             survivors.append(cand)
 
-    findings = aggregate(survivors, tier.max_findings)
+    findings = aggregate(survivors, tier.max_findings, min_confidence)
 
     if not findings and any_errored:
         return Report(findings=[Finding(

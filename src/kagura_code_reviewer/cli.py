@@ -124,6 +124,8 @@ def main(
     effort: Effort = typer.Option(Effort.med, "--effort", help="Review effort: low|med|high."),
     provider: Provider = typer.Option(Provider.ollama, "--provider", help="Backend: ollama|openai|anthropic|gemini."),
     seed: int = typer.Option(None, "--seed", help="Seed for reproducible local reviews."),
+    concurrency: int = typer.Option(1, "--concurrency", help="Parallel finder/verify calls (useful for cloud)."),
+    min_confidence: float = typer.Option(0.0, "--min-confidence", help="Drop findings below this confidence (0-1)."),
     auto: bool = typer.Option(False, "--auto", help="Persist the advisor's model pick to user config."),
     doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
@@ -160,6 +162,7 @@ def main(
         report = review_harness(
             client, client, tools, diff=diff, context=context,
             tier=tier, max_iters=max_iters,
+            max_concurrency=concurrency, min_confidence=min_confidence,
         )
     except (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError) as exc:
         typer.echo(

@@ -23,6 +23,18 @@ def parse_severity(value: str) -> Severity:
         return Severity.INFO
 
 
+def confidence_from_votes(votes: dict) -> float | None:
+    """Derive a 0-1 confidence from verifier votes. None when there are no
+    real verdicts (empty, or only ERROR votes)."""
+    c = votes.get("CONFIRMED", 0)
+    p = votes.get("PLAUSIBLE", 0)
+    r = votes.get("REFUTED", 0)
+    total = c + p + r
+    if total == 0:
+        return None
+    return (c + 0.5 * p) / total
+
+
 @dataclass
 class Finding:
     dimension: str
@@ -35,6 +47,7 @@ class Finding:
     angles: list[str] = field(default_factory=list)
     votes: dict = field(default_factory=dict)
     merge_count: int = 1
+    confidence: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -48,6 +61,7 @@ class Finding:
             "angles": self.angles,
             "votes": self.votes,
             "merge_count": self.merge_count,
+            "confidence": self.confidence,
         }
 
 
@@ -94,10 +108,11 @@ class Report:
             lines.append(f"- **Where:** `{loc}`")
             lines.append(f"- **Why:** {f.rationale}")
             lines.append(f"- **Fix:** {f.suggestion}")
-            if f.angles or f.votes or f.merge_count > 1:
+            if f.angles or f.votes or f.merge_count > 1 or f.confidence is not None:
                 seen = ", ".join(f.angles) if f.angles else "—"
                 count = f" ×{f.merge_count}" if f.merge_count > 1 else ""
                 votes = ("; votes: " + ", ".join(f"{k} {v}" for k, v in f.votes.items())) if f.votes else ""
-                lines.append(f"- **Seen by:** {seen}{count}{votes}")
+                conf = f"; conf {f.confidence:.2f}" if f.confidence is not None else ""
+                lines.append(f"- **Seen by:** {seen}{count}{votes}{conf}")
             lines.append("")
         return "\n".join(lines)

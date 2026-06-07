@@ -91,3 +91,21 @@ def test_from_payload_skips_non_dict_findings():
 
 def test_from_payload_non_list_findings_is_empty():
     assert Report.from_payload({"findings": "oops"}).findings == []
+
+
+def test_confidence_from_votes():
+    from kagura_code_reviewer.report import confidence_from_votes
+    assert confidence_from_votes({"CONFIRMED": 2, "PLAUSIBLE": 1}) == (2 + 0.5) / 3
+    assert confidence_from_votes({"REFUTED": 1}) == 0.0
+    assert confidence_from_votes({}) is None
+    assert confidence_from_votes({"ERROR": 2}) is None  # only error votes -> unknown
+
+
+def test_finding_confidence_in_md_and_json():
+    import json
+    f = Finding("correctness", Severity.HIGH, "a.py", 1, "t", "r", "s",
+                votes={"CONFIRMED": 2, "PLAUSIBLE": 1}, confidence=0.83)
+    md = Report(findings=[f]).to_markdown()
+    assert "conf 0.83" in md
+    d = json.loads(Report(findings=[f]).to_json())["findings"][0]
+    assert d["confidence"] == 0.83
