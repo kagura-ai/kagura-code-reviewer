@@ -34,9 +34,13 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainer at **dev@kagura-ai.com**. All
-complaints will be reviewed and investigated promptly and fairly. The maintainer
-is obligated to respect the privacy and security of the reporter of any incident.
+reported privately to the project maintainers via GitHub — open a private report
+from the repository's *Security* tab
+(<https://github.com/kagura-ai/kagura-code-reviewer/security/advisories/new>), or
+contact a maintainer of the [`kagura-ai`](https://github.com/kagura-ai)
+organization directly. All complaints will be reviewed and investigated promptly
+and fairly. The maintainers are obligated to respect the privacy and security of
+the reporter of any incident.
 
 ## Attribution
 

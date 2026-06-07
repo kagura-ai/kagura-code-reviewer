@@ -14,17 +14,18 @@ version on `main`.
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Preferred: use GitHub's **private vulnerability reporting** (the *Security* tab →
-*Report a vulnerability*) once the repository is on GitHub.
+Use GitHub's **private vulnerability reporting**: the repository's *Security* tab
+→ *Report a vulnerability*
+(<https://github.com/kagura-ai/kagura-code-reviewer/security/advisories/new>).
 
-Alternatively, email **dev@kagura-ai.com** with:
+Please include:
 
 - a description of the issue and its impact,
 - steps to reproduce (a minimal diff or command is ideal), and
 - any suggested remediation.
 
 We aim to acknowledge reports within a few days and to coordinate a fix and
-disclosure timeline with you.
+disclosure timeline with you through the advisory.
 
 ## Threat model notes
 
