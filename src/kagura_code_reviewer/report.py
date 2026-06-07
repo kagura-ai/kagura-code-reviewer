@@ -58,7 +58,13 @@ class Report:
     @classmethod
     def from_payload(cls, payload: dict) -> "Report":
         out: list[Finding] = []
-        for f in payload.get("findings", []):
+        raw = payload.get("findings", [])
+        if not isinstance(raw, list):
+            raw = []
+        for f in raw:
+            if not isinstance(f, dict):
+                # Models sometimes emit findings as bare strings; skip non-dicts.
+                continue
             out.append(
                 Finding(
                     dimension=str(f.get("dimension", "general")),

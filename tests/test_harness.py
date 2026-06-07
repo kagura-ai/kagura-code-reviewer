@@ -354,3 +354,13 @@ def test_run_finders_partial_backend_error_does_not_raise():
                                           max_iters=3, max_concurrency=1)
     assert any_errored is True
     assert len(candidates) == 1
+
+
+def test_run_finder_survives_malformed_terminal_payload():
+    """A submit_findings whose findings aren't dicts must not crash the review."""
+    from kagura_code_reviewer.review.harness import run_finder
+    bad = ChatMessage(content=None, tool_calls=[
+        ToolCall("1", "submit_findings", json.dumps({"findings": ["a bare string"]}))])
+    out = run_finder(ScriptedClient([bad]), StubRepo(), diff="d", context=None,
+                     angle="reuse", max_iters=4)
+    assert out.findings == [] and out.errored is False
