@@ -53,13 +53,20 @@ See the design docs in `docs/superpowers/specs/` and `docs/superpowers/plans/`:
 ## Dev commands
 
 ```bash
-.venv/bin/pytest -q                                  # run the test suite (116 tests)
+.venv/bin/pytest -q                                  # run the test suite (119 tests)
 .venv/bin/kagura-code-reviewer --help
 .venv/bin/kagura-code-reviewer --doctor              # daemon + model + hardware + recommendation
 .venv/bin/kagura-code-reviewer --base main           # review branch vs main (free local, advisor picks model)
 .venv/bin/kagura-code-reviewer --base main --effort high
 .venv/bin/kagura-code-reviewer --base main --provider anthropic   # paid; needs $ANTHROPIC_API_KEY
 ```
+
+**Local context gotcha:** `num_ctx` (config alias / advisor) is *advisory only* — it
+feeds the advisor's VRAM-fit estimate but does **not** change the context Ollama
+loads. Ollama's OpenAI-compat endpoint (`/v1`) ignores per-request `num_ctx`
+(verified on 0.20.2); only the native `/api/chat` honors it. Set the real local
+context via `OLLAMA_CONTEXT_LENGTH` or the model's Modelfile. Making `num_ctx`
+effective (switch the Ollama path to native `/api/chat`) is a tracked enhancement.
 
 ## Status (2026-06-07)
 
