@@ -34,7 +34,9 @@ def test_is_cloud():
 
 def test_lookup_cap_exact_then_family_then_default():
     exact = lookup_cap("qwen2.5-coder:14b")
-    assert exact.tool_calling == "good" and exact.vram_mb == 9000
+    # tool_calling re-rated to "fair": reliable single-shot, but narrates instead
+    # of calling submit_findings in the multi-turn review-agent loop (dogfood).
+    assert exact.tool_calling == "fair" and exact.vram_mb == 9000
     family = lookup_cap("qwen2.5-coder:3b")
     assert family.tool_calling in {"good", "fair"}
     default = lookup_cap("totally-unknown:1b")
@@ -83,6 +85,16 @@ def test_recommend_picks_strongest_local_that_fits_24gb():
     rec = recommend(hw, _INSTALLED, prefer_local=True)
     assert rec.finder == "qwen2.5-coder:14b"
     assert rec.verifier == "qwen2.5-coder:14b"
+    assert rec.fits is True
+
+
+def test_recommend_prefers_reliable_tool_caller_over_higher_aptitude():
+    # Both fit a 24GB GPU. qwen2.5-coder:14b has higher review aptitude but is
+    # unreliable at agentic tool-calling (won't call submit_findings in the
+    # review loop), so the advisor must prefer qwen3:14b, which drives the agent.
+    hw = Hardware(vram_mb=24564, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, ["qwen2.5-coder:14b", "qwen3:14b"], prefer_local=True)
+    assert rec.finder == "qwen3:14b"
     assert rec.fits is True
 
 
