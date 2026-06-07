@@ -243,3 +243,11 @@ def test_cli_auto_persists_recommendation(repo: Path, monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert target.is_file()
     assert "qwen2.5-coder:7b" in target.read_text()
+
+
+def test_cli_out_suppresses_stdout(repo: Path, monkeypatch, tmp_path):
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient())
+    out = tmp_path / "r.md"
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--out", str(out)])
+    assert "bad" in out.read_text()
+    assert "bad" not in result.stdout

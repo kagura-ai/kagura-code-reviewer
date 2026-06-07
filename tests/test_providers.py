@@ -155,3 +155,10 @@ def test_compat_client_includes_seed_when_set(httpserver: HTTPServer):
     client.chat([{"role": "user", "content": "hi"}])
     body = json.loads(httpserver.log[0][0].get_data())
     assert body["seed"] == 42
+
+
+def test_compat_client_handles_empty_choices(httpserver: HTTPServer):
+    httpserver.expect_request("/v1/chat/completions", method="POST").respond_with_json({"choices": []})
+    client = OpenAICompatClient(base_url=httpserver.url_for("/v1"), model="m", api_key="k", timeout=5.0)
+    msg = client.chat([{"role": "user", "content": "hi"}])
+    assert msg.tool_calls == [] and (msg.content == "" or msg.content is None)

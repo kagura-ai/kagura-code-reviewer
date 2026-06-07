@@ -32,7 +32,9 @@ class RepoTools:
         if not target.is_file():
             return f"error: not a file: {path}"
         data = target.read_text(errors="replace")
-        return data[:max_bytes]
+        if len(data) > max_bytes:
+            return data[:max_bytes] + "\n...[truncated]"
+        return data
 
     def grep(self, pattern: str, max_results: int = 50) -> str:
         rx = re.compile(pattern)
@@ -47,14 +49,15 @@ class RepoTools:
                     if rx.search(line):
                         hits.append(f"{rel}:{i}: {line.strip()}")
                         if len(hits) >= max_results:
-                            return "\n".join(hits)
+                            return "\n".join(hits) + "\n...[more matches hidden]"
             except OSError:
                 continue
         return "\n".join(hits) if hits else "no matches"
 
     def list_files(self, subdir: str = ".") -> list[str]:
         self._resolve(subdir)
-        out = self._git("ls-files", subdir)
+        # `--` stops git from interpreting a subdir that starts with `-` as a flag.
+        out = self._git("ls-files", "--", subdir)
         return [line for line in out.splitlines() if line]
 
     def git_diff(self, base: str, head: str = "HEAD", paths: list[str] | None = None) -> str:

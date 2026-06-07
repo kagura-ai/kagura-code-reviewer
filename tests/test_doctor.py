@@ -37,3 +37,9 @@ def test_format_hardware_report_includes_hw_and_recommendation():
     assert "24564" in text and "32" in text
     assert "qwen3.5:27b" in text
     assert "fits GPU VRAM" in text
+
+
+def test_ollama_root_strips_trailing_slash():
+    from kagura_code_reviewer.doctor import _ollama_root
+    assert _ollama_root("http://h:1/v1/") == "http://h:1"
+    assert _ollama_root("http://h:1/v1") == "http://h:1"

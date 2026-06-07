@@ -40,6 +40,8 @@ class OpenAICompatClient:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
         resp = self._client.chat.completions.create(**kwargs)
+        if not resp.choices:  # empty response (model unloaded / context overflow) — no crash
+            return ChatMessage(content="", tool_calls=[])
         msg = resp.choices[0].message
         tool_calls: list[ToolCall] = []
         for tc in msg.tool_calls or []:

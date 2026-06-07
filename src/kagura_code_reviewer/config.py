@@ -33,10 +33,10 @@ def _merge(base: dict, override: dict) -> dict:
 
 
 def load_config(path: Path | None = None) -> dict:
-    data = tomllib.loads(_SHIPPED.read_text())
+    data = tomllib.loads(_SHIPPED.read_text(encoding="utf-8"))
     user_path = path or _USER
     if user_path.is_file():
-        data = _merge(data, tomllib.loads(user_path.read_text()))
+        data = _merge(data, tomllib.loads(user_path.read_text(encoding="utf-8")))
     return data
 
 

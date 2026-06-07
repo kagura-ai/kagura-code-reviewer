@@ -174,5 +174,6 @@ def main(
 
     if out:
         out.write_text(rendered)
-    typer.echo(rendered)
+    else:
+        typer.echo(rendered)
     raise typer.Exit(code=report.exit_code())

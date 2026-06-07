@@ -67,3 +67,28 @@ def test_grep_does_not_follow_symlink_outside_repo(repo: Path):
     tools = RepoTools(repo)
     out = tools.grep("TOPSECRET_NEEDLE")
     assert "TOPSECRET_NEEDLE" not in out
+
+
+def test_list_files_uses_dashdash_separator(tmp_path, monkeypatch):
+    from kagura_code_reviewer.tools import RepoTools
+    rt = RepoTools(tmp_path)
+    captured = {}
+    monkeypatch.setattr(rt, "_git", lambda *a: captured.setdefault("args", a) and "" or "")
+    rt.list_files("--deleted")
+    assert captured["args"] == ("ls-files", "--", "--deleted")
+
+
+def test_read_file_marks_truncation(tmp_path):
+    from kagura_code_reviewer.tools import RepoTools
+    (tmp_path / "f.txt").write_text("abcdefghij")
+    out = RepoTools(tmp_path).read_file("f.txt", max_bytes=4)
+    assert out.startswith("abcd") and out.endswith("...[truncated]")
+
+
+def test_grep_marks_capped_results(tmp_path, monkeypatch):
+    from kagura_code_reviewer.tools import RepoTools
+    (tmp_path / "a.txt").write_text("m\nm\nm\nm\n")
+    rt = RepoTools(tmp_path)
+    monkeypatch.setattr(rt, "list_files", lambda subdir=".": ["a.txt"])
+    out = rt.grep("m", max_results=2)
+    assert out.strip().endswith("...[more matches hidden]")
