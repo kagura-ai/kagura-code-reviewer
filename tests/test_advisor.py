@@ -57,7 +57,18 @@ def test_list_models_returns_empty_on_error():
     assert list_models("http://127.0.0.1:9/v1") == []
 
 
-from kagura_code_reviewer.advisor import Recommendation, recommend
+from kagura_code_reviewer.advisor import (
+    Recommendation, effective_vram_mb, recommend,
+)
+
+
+def test_effective_vram_includes_kv_cache():
+    """Effective footprint exceeds raw weights once the KV-cache is counted,
+    and grows with context length."""
+    small_ctx = ModelCap(0.8, "good", 9000, 8192)
+    large_ctx = ModelCap(0.8, "good", 9000, 32768)
+    assert effective_vram_mb(small_ctx) > small_ctx.vram_mb
+    assert effective_vram_mb(large_ctx) > effective_vram_mb(small_ctx)
 
 _INSTALLED = [
     "qwen3.5:27b", "qwen2.5-coder:14b", "qwen2.5-coder:7b",
@@ -66,10 +77,12 @@ _INSTALLED = [
 
 
 def test_recommend_picks_strongest_local_that_fits_24gb():
+    # qwen3.5:27b (17GB weights) overflows a 24GB GPU once the 32k KV-cache is
+    # counted, so the strongest model that *actually* fits is qwen2.5-coder:14b.
     hw = Hardware(vram_mb=24564, ram_mb=96000, cpu_threads=32, has_gpu=True)
     rec = recommend(hw, _INSTALLED, prefer_local=True)
-    assert rec.finder == "qwen3.5:27b"
-    assert rec.verifier == "qwen3.5:27b"
+    assert rec.finder == "qwen2.5-coder:14b"
+    assert rec.verifier == "qwen2.5-coder:14b"
     assert rec.fits is True
 
 

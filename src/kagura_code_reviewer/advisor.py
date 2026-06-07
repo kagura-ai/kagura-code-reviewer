@@ -118,6 +118,24 @@ class Recommendation:
 
 _VRAM_SAFETY = 0.9
 
+# KV-cache grows ~linearly with both context length and model size. This coarse
+# heuristic (MB of KV per MB of weights per 1k tokens of context) is calibrated
+# so a 27B model at 32k context overflows a 24GB GPU — matching the observed
+# Ollama CPU-offload behaviour. Counting it stops the advisor recommending a
+# model that only "fits" on paper (weights alone) and then offloads, running
+# many times slower than a smaller model that fits entirely in VRAM.
+_KV_MB_PER_WEIGHT_MB_PER_1K_CTX = 0.0126
+
+
+def kv_cache_mb(cap: ModelCap) -> int:
+    """Approximate KV-cache footprint at the model's full context length."""
+    return int(cap.vram_mb * (cap.ctx / 1000.0) * _KV_MB_PER_WEIGHT_MB_PER_1K_CTX)
+
+
+def effective_vram_mb(cap: ModelCap) -> int:
+    """Approximate total VRAM at load: weights + KV-cache for the model's context."""
+    return cap.vram_mb + kv_cache_mb(cap)
+
 
 def recommend(hardware: Hardware, installed: list[str], prefer_local: bool = True) -> Recommendation:
     candidates = [
@@ -138,14 +156,14 @@ def recommend(hardware: Hardware, installed: list[str], prefer_local: bool = Tru
         return Recommendation(best, best, f"cloud model {best} (aptitude {cap.review})", True)
 
     usable_vram = hardware.vram_mb * _VRAM_SAFETY
-    fitting = [m for m in candidates if lookup_cap(m).vram_mb <= usable_vram]
+    fitting = [m for m in candidates if effective_vram_mb(lookup_cap(m)) <= usable_vram]
     if fitting:
         pool, fits = fitting, True
     else:
-        pool = [m for m in candidates if lookup_cap(m).vram_mb <= hardware.ram_mb] or candidates
+        pool = [m for m in candidates if effective_vram_mb(lookup_cap(m)) <= hardware.ram_mb] or candidates
         fits = False
     best = max(pool, key=lambda m: lookup_cap(m).review)
     cap = lookup_cap(best)
     where = "GPU VRAM" if fits else "system RAM (no GPU fit; slower)"
-    reason = f"local model {best} (aptitude {cap.review}, ~{cap.vram_mb} MB) fits {where}"
+    reason = f"local model {best} (aptitude {cap.review}, ~{effective_vram_mb(cap)} MB incl. KV) fits {where}"
     return Recommendation(best, best, reason, fits)

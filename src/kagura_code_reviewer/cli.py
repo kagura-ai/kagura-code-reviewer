@@ -60,9 +60,13 @@ def _no_user_config() -> bool:
 
 
 def _resolve_spec(model: str | None, local: bool, cloud: bool):
-    # 1. explicit alias wins
+    # 1. explicit alias wins; an unknown value is treated as a bare ollama tag
     if model is not None:
-        return resolve_model(model, local=local)
+        try:
+            return resolve_model(model, local=local)
+        except KeyError:
+            base_url = _local_base_url()
+            return spec_from_model_name(model, base_url, num_ctx=lookup_cap(model).ctx)
     # 2/3. explicit backend choice OR 5. zero-config default -> advisor
     if cloud or local or _no_user_config():
         base_url = _local_base_url()
