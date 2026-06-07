@@ -85,7 +85,7 @@ def main(
         typer.echo(
             f"Ollama request failed: {exc}\n"
             f"Is the ollama daemon running and is model '{spec.ollama_model}' pulled? "
-            f"Try: kagura-code-review --doctor",
+            f"Try: kagura-code-reviewer --doctor",
             err=True,
         )
         raise typer.Exit(code=3)

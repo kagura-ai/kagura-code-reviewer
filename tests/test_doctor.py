@@ -1,6 +1,6 @@
 from pytest_httpserver import HTTPServer
 
-from kagura_code_review.doctor import check_ollama, check_model
+from kagura_code_reviewer.doctor import check_ollama, check_model
 
 
 def test_check_ollama_ok(httpserver: HTTPServer):

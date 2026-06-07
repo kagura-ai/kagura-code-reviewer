@@ -1,5 +1,5 @@
-import kagura_code_review
+import kagura_code_reviewer
 
 
 def test_version_present():
-    assert kagura_code_review.__version__
+    assert kagura_code_reviewer.__version__

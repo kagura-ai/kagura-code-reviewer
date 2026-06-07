@@ -1,6 +1,6 @@
 import pytest
 
-from kagura_code_review.config import resolve_model
+from kagura_code_reviewer.config import resolve_model
 
 
 def test_default_alias_resolves():
@@ -20,7 +20,7 @@ def test_unknown_alias_raises():
 
 
 def test_shipped_config_has_effort_tiers():
-    from kagura_code_review.config import load_config
+    from kagura_code_reviewer.config import load_config
     cfg = load_config()
     assert set(cfg["effort"]) >= {"low", "med", "high"}
     assert cfg["effort"]["med"]["max_findings"] == 10

@@ -1,6 +1,6 @@
-# kagura-code-review
+# kagura-code-reviewer
 
-Cost-free, Ollama-powered code review for Claude Code. The review "brain" runs on an Ollama model (cloud or local), so reviews consume **zero Anthropic billing**. A companion slash command (`/kagura-code-review`) integrates with Kagura Memory: the outer Claude session retrieves past conventions and findings, passes them as context to the CLI, then writes durable knowledge back after the review. The CLI itself is a self-contained tool — it does not call Kagura Memory directly.
+Cost-free, Ollama-powered code review for Claude Code. The review "brain" runs on an Ollama model (cloud or local), so reviews consume **zero Anthropic billing**. A companion slash command (`/kagura-code-reviewer`) integrates with Kagura Memory: the outer Claude session retrieves past conventions and findings, passes them as context to the CLI, then writes durable knowledge back after the review. The CLI itself is a self-contained tool — it does not call Kagura Memory directly.
 
 ---
 
@@ -8,14 +8,14 @@ Cost-free, Ollama-powered code review for Claude Code. The review "brain" runs o
 
 ```
 Claude Code (outer session)
-   │  /kagura-code-review slash command
+   │  /kagura-code-reviewer slash command
    │  1. Recalls past findings from Kagura Memory (trust_tier: trusted filter)
    │  2. Writes assembled context to /tmp/kcr-ctx.md
    │  3. Invokes CLI ──────────────────────────────────────────────────────┐
    │                                                                        │
    └── Presents report to user ←── 5. Writes durable knowledge back        │
                                                                             ▼
-                                                         kagura-code-review CLI
+                                                         kagura-code-reviewer CLI
                                                             │  git diff (base...HEAD)
                                                             │  sandboxed repo tools
                                                             │    read_file / grep / git
@@ -33,7 +33,7 @@ Claude Code (outer session)
 ## Install
 
 ```bash
-pip install kagura-code-review
+pip install kagura-code-reviewer
 ```
 
 ### System prerequisites
@@ -43,7 +43,7 @@ These are **not** installed by pip — you must set them up separately:
 - **Ollama daemon** running with at least one model pulled.  
   Default cloud alias uses `qwen3-coder:480b-cloud`; default local alias uses `qwen2.5-coder:7b`.  
   Pull with: `ollama pull qwen2.5-coder:7b`
-- **`claude` CLI** — required only for the `/kagura-code-review` slash-command workflow.  
+- **`claude` CLI** — required only for the `/kagura-code-reviewer` slash-command workflow.  
   Install via: `npm install -g @anthropic-ai/claude-code`
 
 ---
@@ -52,16 +52,16 @@ These are **not** installed by pip — you must set them up separately:
 
 ```bash
 # Review current branch vs main (Markdown to stdout)
-kagura-code-review --base main
+kagura-code-reviewer --base main
 
 # Write report as JSON to a file
-kagura-code-review --base main --format json --out report.json
+kagura-code-reviewer --base main --format json --out report.json
 
 # Use the local model alias (faster, smaller)
-kagura-code-review --local
+kagura-code-reviewer --local
 
 # Limit review to specific paths
-kagura-code-review --base main --paths src/foo.py --paths tests/test_foo.py
+kagura-code-reviewer --base main --paths src/foo.py --paths tests/test_foo.py
 ```
 
 **Exit codes:**
@@ -76,15 +76,15 @@ kagura-code-review --base main --paths src/foo.py --paths tests/test_foo.py
 Install the shipped slash command into your project's `.claude/commands/` directory:
 
 ```bash
-# Copy the shipped slash command into your project so Claude Code can run /kagura-code-review
+# Copy the shipped slash command into your project so Claude Code can run /kagura-code-reviewer
 mkdir -p .claude/commands
-cp "$(python -c "import kagura_code_review, pathlib; print(pathlib.Path(kagura_code_review.__file__).parent / 'commands' / 'kagura-code-review.md')")" .claude/commands/
+cp "$(python -c "import kagura_code_review, pathlib; print(pathlib.Path(kagura_code_review.__file__).parent / 'commands' / 'kagura-code-reviewer.md')")" .claude/commands/
 ```
 
 Then inside Claude Code, run:
 
 ```
-/kagura-code-review
+/kagura-code-reviewer
 ```
 
 The command will:
@@ -115,7 +115,7 @@ base_url     = "http://localhost:11434/v1"
 num_ctx      = 16384
 ```
 
-**User override:** create `~/.config/kagura-code-review/config.toml` (or set `KAGURA_CODE_REVIEW_CONFIG` to an alternate path). Only keys you set override the defaults; everything else inherits.
+**User override:** create `~/.config/kagura-code-reviewer/config.toml` (or set `KAGURA_CODE_REVIEW_CONFIG` to an alternate path). Only keys you set override the defaults; everything else inherits.
 
 To add a custom alias:
 
@@ -139,7 +139,7 @@ The following are **not yet implemented** and are not claimed above:
 - Memory-pattern sharing with `kagura-engineer` or other kagura-* tools
 - MCP server mode
 
-Design spec: [`docs/superpowers/specs/2026-06-06-kagura-code-review-design.md`](docs/superpowers/specs/2026-06-06-kagura-code-review-design.md)
+Design spec: [`docs/superpowers/specs/2026-06-06-kagura-code-reviewer-design.md`](docs/superpowers/specs/2026-06-06-kagura-code-reviewer-design.md)
 
 ---
 

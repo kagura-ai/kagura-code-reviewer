@@ -8,8 +8,8 @@ from pathlib import Path
 _SHIPPED = Path(__file__).with_name("config.toml")
 _USER = Path(
     os.environ.get(
-        "KAGURA_CODE_REVIEW_CONFIG",
-        Path.home() / ".config" / "kagura-code-review" / "config.toml",
+        "KAGURA_CODE_REVIEWER_CONFIG",
+        Path.home() / ".config" / "kagura-code-reviewer" / "config.toml",
     )
 )
 

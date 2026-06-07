@@ -1,8 +1,8 @@
 import json
 
-from kagura_code_review.agent import ChatMessage, ToolCall
-from kagura_code_review.report import Severity
-from kagura_code_review.review.skill import review
+from kagura_code_reviewer.agent import ChatMessage, ToolCall
+from kagura_code_reviewer.report import Severity
+from kagura_code_reviewer.review.skill import review
 
 
 class ScriptedClient:
