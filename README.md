@@ -212,7 +212,7 @@ The following are **not yet implemented** and are not claimed above:
 - Memory-pattern sharing with `kagura-engineer` or other kagura-* tools
 - MCP server mode
 
-Design spec: [`docs/superpowers/specs/2026-06-06-kagura-code-reviewer-design.md`](docs/superpowers/specs/2026-06-06-kagura-code-reviewer-design.md)
+Design spec: [`docs/superpowers/specs/2026-06-06-kagura-code-review-design.md`](docs/superpowers/specs/2026-06-06-kagura-code-review-design.md)
 
 ---
 
