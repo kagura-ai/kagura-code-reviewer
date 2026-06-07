@@ -76,3 +76,18 @@ def test_json_includes_provenance():
                 angles=["reuse"], votes={"PLAUSIBLE": 1}, merge_count=3)
     d = json.loads(Report(findings=[f]).to_json())["findings"][0]
     assert d["angles"] == ["reuse"] and d["votes"] == {"PLAUSIBLE": 1} and d["merge_count"] == 3
+
+
+def test_from_payload_skips_non_dict_findings():
+    # A model may return findings as bare strings; must not crash, just skip them.
+    payload = {"findings": [
+        "some free-text finding",
+        {"dimension": "correctness", "severity": "high", "file": "a.py",
+         "line": 1, "title": "real", "rationale": "r", "suggestion": "s"},
+    ]}
+    r = Report.from_payload(payload)
+    assert len(r.findings) == 1 and r.findings[0].title == "real"
+
+
+def test_from_payload_non_list_findings_is_empty():
+    assert Report.from_payload({"findings": "oops"}).findings == []
