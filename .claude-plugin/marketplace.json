@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kagura-code-reviewer",
+  "description": "Cost-free, Ollama-first code-review agent for Claude Code — multi-angle finders, adversarial verify, structured verdict.",
+  "owner": {
+    "name": "Kagura AI, Inc.",
+    "url": "https://github.com/kagura-ai"
+  },
+  "plugins": [
+    {
+      "name": "kagura-code-reviewer",
+      "source": "./",
+      "version": "0.1.1",
+      "category": "code-quality"
+    }
+  ]
+}

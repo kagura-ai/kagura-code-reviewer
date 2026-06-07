@@ -30,3 +30,35 @@ jobs:
       # needed in CI.
       - name: Test
         run: pytest -q
+
+  version-sync:
+    # Guard against version drift across the package manifest and the Claude
+    # Code plugin manifests. pyproject [project].version is the single source
+    # of truth; the others must match it. Bump all four together on release.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version alignment across manifests
+        run: |
+          set -euo pipefail
+          PYPROJECT=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          INIT=$(python3 -c "import re; print(re.search(r'__version__\s*=\s*\"([^\"]+)\"', open('src/kagura_code_reviewer/__init__.py').read()).group(1))")
+          jq empty .claude-plugin/plugin.json
+          jq empty .claude-plugin/marketplace.json
+          PLUGIN=$(jq -r '.version' .claude-plugin/plugin.json)
+          MARKET=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
+          echo "pyproject=$PYPROJECT __init__=$INIT plugin.json=$PLUGIN marketplace.json=$MARKET"
+          fail=0
+          for pair in "__init__.py:$INIT" "plugin.json:$PLUGIN" "marketplace.json:$MARKET"; do
+            name=${pair%%:*}; val=${pair#*:}
+            if [ "$val" != "$PYPROJECT" ]; then
+              echo "::error::version drift — $name=$val != pyproject=$PYPROJECT"
+              fail=1
+            fi
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "Version drift detected. Sync every manifest to pyproject [project].version."
+            exit 1
+          fi
+          echo "All versions aligned at $PYPROJECT ✓"

@@ -127,7 +127,25 @@ from "real blocking findings."
 
 ## Slash-command / Kagura Memory workflow
 
-Install the shipped slash command into your project's `.claude/commands/` directory:
+There are two ways to get the `/kagura-code-reviewer` slash command into Claude Code.
+
+### Option A — Install as a Claude Code plugin (recommended)
+
+Add the Kagura marketplace and install the plugin from inside Claude Code:
+
+```
+/plugin marketplace add kagura-ai/kagura-code-reviewer
+/plugin install kagura-code-reviewer@kagura-code-reviewer
+```
+
+`/kagura-code-reviewer` then appears in your skill list across every project — no
+per-repo copy needed. (You still need the `kagura-code-reviewer` CLI on your
+`PATH`; install it with `pip install kagura-code-reviewer`.)
+
+### Option B — Copy the shipped command into a single project
+
+If you installed the PyPI package and only want the command in one repo, copy the
+shipped command into that project's `.claude/commands/` directory:
 
 ```bash
 # Copy the shipped slash command into your project so Claude Code can run /kagura-code-reviewer
