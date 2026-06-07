@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import kagura_code_review.cli as cli_mod
-from kagura_code_review.agent import ChatMessage, ToolCall
+import kagura_code_reviewer.cli as cli_mod
+from kagura_code_reviewer.agent import ChatMessage, ToolCall
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -98,8 +98,8 @@ def test_cli_handles_ollama_failure(repo: Path, monkeypatch):
 
 
 def test_cli_doctor_flag(monkeypatch, tmp_path: Path):
-    from kagura_code_review import doctor as doctor_mod
-    from kagura_code_review.doctor import CheckResult
+    from kagura_code_reviewer import doctor as doctor_mod
+    from kagura_code_reviewer.doctor import CheckResult
 
     monkeypatch.setattr(doctor_mod, "check_ollama", lambda base_url: CheckResult("ollama daemon", True, "ok"))
     monkeypatch.setattr(doctor_mod, "check_model", lambda base_url, model: CheckResult(f"model {model}", True, "pulled"))
@@ -110,7 +110,7 @@ def test_cli_doctor_flag(monkeypatch, tmp_path: Path):
 
 
 def test_cli_effort_option_invokes_harness(repo: Path, monkeypatch):
-    from kagura_code_review.report import Report
+    from kagura_code_reviewer.report import Report
     captured = {}
 
     def fake_harness(finder_client, verifier_client, repo_, diff, context, tier,

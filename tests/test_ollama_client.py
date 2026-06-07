@@ -2,7 +2,7 @@ import json
 
 from pytest_httpserver import HTTPServer
 
-from kagura_code_review.ollama_client import OllamaClient
+from kagura_code_reviewer.ollama_client import OllamaClient
 
 
 def test_chat_parses_plain_content(httpserver: HTTPServer):

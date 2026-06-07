@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from kagura_code_review.tools import RepoTools
+from kagura_code_reviewer.tools import RepoTools
 
 
 def _git(repo: Path, *args: str) -> None:

@@ -1,4 +1,4 @@
-from kagura_code_review.agent import (
+from kagura_code_reviewer.agent import (
     ChatMessage,
     Tool,
     ToolCall,

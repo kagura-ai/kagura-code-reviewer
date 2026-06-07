@@ -19,7 +19,7 @@ Follow these steps:
      past bugs/decisions.
    - Write the assembled text to `/tmp/kcr-ctx.md`.
 3. **Run the review (free, on Ollama):**
-   `kagura-code-review --base main --context-file /tmp/kcr-ctx.md --format md`
+   `kagura-code-reviewer --base main --context-file /tmp/kcr-ctx.md --format md`
 4. **Present the report** to the user.
 5. **Write back ONLY durable value:**
    - `remember(...)` new conventions or recurring findings (not one-off nits);

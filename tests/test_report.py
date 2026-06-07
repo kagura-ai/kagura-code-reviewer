@@ -1,4 +1,4 @@
-from kagura_code_review.report import Finding, Report, Severity, parse_severity
+from kagura_code_reviewer.report import Finding, Report, Severity, parse_severity
 
 
 def test_parse_severity_case_insensitive():
