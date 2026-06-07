@@ -85,6 +85,27 @@ def test_read_file_marks_truncation(tmp_path):
     assert out.startswith("abcd") and out.endswith("...[truncated]")
 
 
+def test_read_file_refuses_secret_files(tmp_path):
+    """read_file must not exfiltrate secrets even if a (possibly injected) tool
+    call targets them — least privilege (CSO threat model)."""
+    rt = RepoTools(tmp_path)
+    cases = {".env": "SECRET=topsecret", ".env.local": "API=k",
+             "server.pem": "PRIVATEKEY", "id_rsa": "PRIVKEYBODY"}
+    for name, body in cases.items():
+        (tmp_path / name).write_text(body)
+        out = rt.read_file(name)
+        assert body.split("=")[0] not in out and "KEY" not in out and "PRIV" not in out
+        assert "refus" in out.lower()
+
+
+def test_read_file_refuses_git_internals(tmp_path):
+    rt = RepoTools(tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "config").write_text("url = https://user:TOKEN_LEAK@host/r\n")
+    out = rt.read_file(".git/config")
+    assert "TOKEN_LEAK" not in out
+
+
 def test_grep_marks_capped_results(tmp_path, monkeypatch):
     from kagura_code_reviewer.tools import RepoTools
     (tmp_path / "a.txt").write_text("m\nm\nm\nm\n")

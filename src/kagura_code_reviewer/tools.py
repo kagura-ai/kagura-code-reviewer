@@ -4,6 +4,23 @@ import re
 import subprocess
 from pathlib import Path
 
+# Files a code review never needs to read, but an injected tool call might target
+# to exfiltrate secrets. read_file refuses these (least privilege, CSO).
+_SECRET_NAMES = frozenset({
+    "id_rsa", "id_dsa", "id_ecdsa", "id_ed25519",
+    ".netrc", ".npmrc", ".pypirc", "credentials",
+})
+_SECRET_SUFFIXES = frozenset({".pem", ".key", ".pfx", ".p12"})
+
+
+def _is_sensitive(target: Path) -> bool:
+    if ".git" in target.parts:  # git internals can hold tokens (e.g. remote URLs)
+        return True
+    name = target.name
+    if name == ".env" or name.startswith(".env."):
+        return True
+    return name in _SECRET_NAMES or target.suffix in _SECRET_SUFFIXES
+
 
 class RepoTools:
     """In-repo file/git/grep tools, sandboxed to the repository root."""
@@ -29,6 +46,8 @@ class RepoTools:
 
     def read_file(self, path: str, max_bytes: int = 20000) -> str:
         target = self._resolve(path)
+        if _is_sensitive(target):
+            return f"error: refusing to read sensitive file: {path}"
         if not target.is_file():
             return f"error: not a file: {path}"
         data = target.read_text(errors="replace")
