@@ -34,3 +34,11 @@ def test_spec_from_model_name_builds_spec():
     assert spec.base_url == "http://localhost:11434/v1"
     assert spec.num_ctx == 32768
     assert spec.alias == "auto"
+
+
+def test_shipped_config_has_providers():
+    from kagura_code_reviewer.config import load_config
+    cfg = load_config()
+    assert set(cfg["providers"]) >= {"ollama", "openai", "anthropic", "gemini"}
+    assert cfg["providers"]["anthropic"]["kind"] == "anthropic"
+    assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
