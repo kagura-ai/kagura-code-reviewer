@@ -60,12 +60,18 @@ class ModelCap:
     ctx: int
 
 
+# NOTE on qwen2.5-coder tool_calling="fair": empirically (2026-06-07 dogfood) the
+# qwen2.5-coder family narrates findings as prose instead of calling the terminal
+# submit_findings tool in the multi-turn review-agent loop, yielding zero findings
+# on buggy code. It is fine at single-shot tool calls but unreliable as an agent
+# driver — "fair", not "good", so the advisor prefers a reliable tool-caller
+# (e.g. qwen3) when one fits. See recommend()'s tool-calling-first ranking.
 MODEL_CAPABILITIES: dict[str, ModelCap] = {
     "qwen3.5:27b": ModelCap(0.85, "good", 17000, 32768),
     "qwen3:30b": ModelCap(0.82, "good", 18000, 32768),
-    "qwen2.5-coder:14b": ModelCap(0.80, "good", 9000, 32768),
+    "qwen2.5-coder:14b": ModelCap(0.80, "fair", 9000, 32768),
     "qwen3:14b": ModelCap(0.74, "good", 9000, 32768),
-    "qwen2.5-coder:7b": ModelCap(0.55, "good", 5000, 16384),
+    "qwen2.5-coder:7b": ModelCap(0.55, "fair", 5000, 16384),
     "qwen3.5:9b": ModelCap(0.55, "fair", 6600, 16384),
     "gemma4:31b": ModelCap(0.60, "fair", 19000, 8192),
     "qwen3-coder:480b-cloud": ModelCap(0.95, "good", 0, 32768),
@@ -74,13 +80,23 @@ MODEL_CAPABILITIES: dict[str, ModelCap] = {
 
 # Family-prefix fallbacks (matched by longest prefix before the default).
 _FAMILY_CAPS: dict[str, ModelCap] = {
-    "qwen2.5-coder": ModelCap(0.6, "good", 6000, 16384),
+    "qwen2.5-coder": ModelCap(0.6, "fair", 6000, 16384),
     "qwen3.5": ModelCap(0.6, "good", 8000, 16384),
     "qwen3-coder": ModelCap(0.9, "good", 0, 32768),
     "qwen3": ModelCap(0.6, "good", 8000, 16384),
     "gemma4": ModelCap(0.55, "fair", 12000, 8192),
     "deepseek-r1": ModelCap(0.40, "poor", 9000, 8192),
 }
+
+# Tool-calling reliability is a HARD requirement for the agentic review loop: a
+# model that won't call submit_findings is useless regardless of review aptitude.
+# Rank by tool-calling tier first, then review aptitude.
+_TOOL_RANK = {"good": 2, "fair": 1, "poor": 0}
+
+
+def _rank_key(name: str) -> tuple[int, float]:
+    cap = lookup_cap(name)
+    return (_TOOL_RANK.get(cap.tool_calling, 0), cap.review)
 
 _DEFAULT_CAP = ModelCap(0.3, "fair", 6000, 8192)
 
@@ -151,7 +167,7 @@ def recommend(hardware: Hardware, installed: list[str], prefer_local: bool = Tru
         )
 
     if not prefer_local:
-        best = max(candidates, key=lambda m: lookup_cap(m).review)
+        best = max(candidates, key=_rank_key)
         cap = lookup_cap(best)
         return Recommendation(best, best, f"cloud model {best} (aptitude {cap.review})", True)
 
@@ -162,7 +178,7 @@ def recommend(hardware: Hardware, installed: list[str], prefer_local: bool = Tru
     else:
         pool = [m for m in candidates if effective_vram_mb(lookup_cap(m)) <= hardware.ram_mb] or candidates
         fits = False
-    best = max(pool, key=lambda m: lookup_cap(m).review)
+    best = max(pool, key=_rank_key)
     cap = lookup_cap(best)
     where = "GPU VRAM" if fits else "system RAM (no GPU fit; slower)"
     reason = f"local model {best} (aptitude {cap.review}, ~{effective_vram_mb(cap)} MB incl. KV) fits {where}"
