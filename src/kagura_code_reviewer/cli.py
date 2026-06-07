@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from enum import Enum
 from pathlib import Path
@@ -11,6 +12,8 @@ import typer
 from .advisor import detect_hardware, list_models, lookup_cap, recommend
 from .config import _USER, load_config, resolve_model, spec_from_model_name
 from .ollama_client import OllamaClient
+from .providers.anthropic_client import AnthropicClient
+from .providers.openai_compat import OpenAICompatClient
 from .review.harness import resolve_tier, review_harness
 from .tools import RepoTools
 
@@ -26,6 +29,13 @@ class Effort(str, Enum):
     low = "low"
     med = "med"
     high = "high"
+
+
+class Provider(str, Enum):
+    ollama = "ollama"
+    openai = "openai"
+    anthropic = "anthropic"
+    gemini = "gemini"
 
 
 def client_factory(spec, timeout: float):
@@ -64,6 +74,33 @@ def _resolve_spec(model: str | None, local: bool, cloud: bool):
     return resolve_model(None, local=False)
 
 
+def build_review_client(provider: str, model: str | None, local: bool, cloud: bool, timeout: float):
+    """Return (client, model_label). Ollama keeps the advisor default path; other
+    providers read their API key from the environment only (never stored)."""
+    if provider == "ollama":
+        spec = _resolve_spec(model, local, cloud)
+        return client_factory(spec, timeout), spec.ollama_model
+    cfg = load_config().get("providers", {}).get(provider, {})
+    key_env = cfg.get("api_key_env", "")
+    api_key = os.environ.get(key_env, "") if key_env else ""
+    if key_env and not api_key:
+        typer.echo(
+            f"Provider '{provider}' needs ${key_env} set (or use --provider ollama).",
+            err=True,
+        )
+        raise typer.Exit(code=2)
+    chosen = model or cfg.get("default_model")
+    if not chosen:
+        typer.echo(f"No model for provider '{provider}'; pass --model.", err=True)
+        raise typer.Exit(code=2)
+    if cfg.get("kind") == "anthropic":
+        return AnthropicClient(model=chosen, api_key=api_key,
+                               max_tokens=int(cfg.get("max_tokens", 4096)),
+                               timeout=timeout), chosen
+    return OpenAICompatClient(base_url=cfg["base_url"], model=chosen,
+                              api_key=api_key, timeout=timeout), chosen
+
+
 @app.command()
 def main(
     base: str = typer.Option("main", help="Base ref to diff against."),
@@ -79,6 +116,7 @@ def main(
     timeout: float = typer.Option(120.0, help="Per-call timeout (seconds)."),
     max_iters: int = typer.Option(12, help="Max agent iterations."),
     effort: Effort = typer.Option(Effort.med, "--effort", help="Review effort: low|med|high."),
+    provider: Provider = typer.Option(Provider.ollama, "--provider", help="Backend: ollama|openai|anthropic|gemini."),
     doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
     if doctor:
@@ -95,7 +133,6 @@ def main(
         typer.echo(_doctor.format_hardware_report(hw, rec))
         raise typer.Exit(code=0 if all(r.ok for r in results) else 1)
 
-    spec = _resolve_spec(model, local, cloud)
     tools = RepoTools(repo)
     try:
         diff = tools.git_diff(base, head, paths or None)
@@ -107,7 +144,7 @@ def main(
         raise typer.Exit(code=0)
 
     context = context_file.read_text() if context_file and context_file.is_file() else None
-    client = client_factory(spec, timeout)
+    client, model_label = build_review_client(provider.value, model, local, cloud, timeout)
 
     tier = resolve_tier(effort.value, config=load_config())
     try:
@@ -117,8 +154,8 @@ def main(
         )
     except (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError) as exc:
         typer.echo(
-            f"Ollama request failed: {exc}\n"
-            f"Is the ollama daemon running and is model '{spec.ollama_model}' pulled? "
+            f"{provider.value} request failed: {exc}\n"
+            f"Is the backend reachable and is model '{model_label}' available? "
             f"Try: kagura-code-reviewer --doctor",
             err=True,
         )
