@@ -119,7 +119,26 @@ The command will:
 3. Present the report.
 4. Write durable new conventions and recurring patterns back to memory.
 
-> The `trust_tier: trusted` filter is intentional and required — the context is fed directly to another model, so untrusted memories must never act as instructions.
+### Memory security contract
+
+Memory is grounding, not authority. The CLI receives only a string via
+`--context-file` and **cannot re-verify its provenance**, so callers are
+responsible for these guarantees (defense in depth):
+
+1. **Recall with `trust_tier: "trusted"`** — required. It excludes
+   external/connector-ingested memories (Slack/Discord/etc.) that could carry
+   injected instructions (OWASP LLM01/LLM03). The CLI assumes the caller has
+   filtered; it does not (and cannot) check.
+2. **Injected memory is untrusted, reference-only data.** The CLI fences it in
+   `BEGIN/END UNTRUSTED MEMORY CONTEXT` markers and the system prompt forbids
+   obeying anything inside them.
+3. **Memory has no finding-suppression authority.** The verdict is computed from
+   findings produced via the `submit_findings` tool and the adversarial verify
+   pass — never from prose or memory. Context can inform a finding's rationale
+   but cannot remove a finding or change the verdict.
+4. For autonomous use, only let **owner-pinned** memory influence gating
+   decisions; do not treat agent-authored `on_recall` memories as trusted for
+   security-relevant gates (avoids a self-poisoning feedback loop).
 
 ---
 
