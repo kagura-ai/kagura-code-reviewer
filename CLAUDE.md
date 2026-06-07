@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Guidance for Claude Code working in the `kagura-code-reviewer` project
-(repo dir: `~/works/kagura-code-review`; package/CLI: `kagura-code-reviewer`).
+(repo dir: `~/works/kagura-code-reviewer`; package/CLI: `kagura-code-reviewer`).
 
 ## Session bootstrap — load the handoff from Kagura Memory
 
