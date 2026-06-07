@@ -86,3 +86,38 @@ def test_chat_handles_missing_message(httpserver: HTTPServer):
     client = OllamaClient(base_url=httpserver.url_for("/v1"), model="qwen", timeout=5.0)
     msg = client.chat([{"role": "user", "content": "hi"}])
     assert msg.tool_calls == [] and (msg.content == "" or msg.content is None)
+
+
+def test_chat_retries_transient_5xx_then_succeeds(httpserver: HTTPServer, monkeypatch):
+    """Ollama can briefly return 5xx (e.g. during a model swap). The client must
+    retry transient errors — matching the resilience the OpenAI SDK gave us."""
+    monkeypatch.setattr("kagura_code_reviewer.ollama_client.time.sleep", lambda s: None)
+    httpserver.expect_ordered_request("/api/chat", method="POST").respond_with_data("loading", status=503)
+    httpserver.expect_ordered_request("/api/chat", method="POST").respond_with_json(_native("hi"))
+    client = OllamaClient(base_url=httpserver.url_for("/v1"), model="qwen", timeout=5.0)
+    msg = client.chat([{"role": "user", "content": "hi"}])
+    assert msg.content == "hi"
+    assert len(httpserver.log) == 2  # one retry
+
+
+def test_chat_raises_after_retries_exhausted(httpserver: HTTPServer, monkeypatch):
+    import httpx
+    import pytest
+    monkeypatch.setattr("kagura_code_reviewer.ollama_client.time.sleep", lambda s: None)
+    httpserver.expect_request("/api/chat", method="POST").respond_with_data("down", status=500)
+    client = OllamaClient(base_url=httpserver.url_for("/v1"), model="qwen", timeout=5.0, max_retries=2)
+    with pytest.raises(httpx.HTTPError):
+        client.chat([{"role": "user", "content": "hi"}])
+    assert len(httpserver.log) == 3  # initial + 2 retries
+
+
+def test_chat_does_not_retry_client_error(httpserver: HTTPServer, monkeypatch):
+    """A 400 is a deterministic client error — don't waste retries on it."""
+    import httpx
+    import pytest
+    monkeypatch.setattr("kagura_code_reviewer.ollama_client.time.sleep", lambda s: None)
+    httpserver.expect_request("/api/chat", method="POST").respond_with_data("bad", status=400)
+    client = OllamaClient(base_url=httpserver.url_for("/v1"), model="qwen", timeout=5.0, max_retries=2)
+    with pytest.raises(httpx.HTTPError):
+        client.chat([{"role": "user", "content": "hi"}])
+    assert len(httpserver.log) == 1  # no retry

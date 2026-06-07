@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import time
 
 import httpx
 
 from .agent import ChatMessage, ToolCall
 from .doctor import _ollama_root
+
+# Transient HTTP statuses worth retrying (e.g. Ollama returns 5xx briefly while
+# loading/swapping a model). 4xx are deterministic client errors — never retried.
+_RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 
 def _to_native_messages(messages: list[dict]) -> list[dict]:
@@ -55,7 +60,8 @@ class OllamaClient:
     """
 
     def __init__(self, base_url, model, num_ctx=8192, timeout=120.0,
-                 api_key="ollama", temperature=0.0, seed=None):
+                 api_key="ollama", temperature=0.0, seed=None,
+                 max_retries=2, backoff=0.5):
         self.model = model
         self.num_ctx = num_ctx
         self.temperature = temperature
@@ -63,6 +69,27 @@ class OllamaClient:
         self._url = f"{_ollama_root(base_url)}/api/chat"
         self._timeout = timeout
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        self._max_retries = max_retries
+        self._backoff = backoff
+
+    def _post_with_retry(self, body: dict) -> httpx.Response:
+        # Restore the transient-error resilience the OpenAI SDK provided: retry
+        # connection errors / timeouts / transient 5xx with exponential backoff.
+        for attempt in range(self._max_retries + 1):
+            try:
+                resp = httpx.post(self._url, json=body, timeout=self._timeout,
+                                  headers=self._headers)
+                resp.raise_for_status()
+                return resp
+            except httpx.HTTPStatusError as exc:
+                if (exc.response.status_code not in _RETRY_STATUS
+                        or attempt == self._max_retries):
+                    raise
+            except httpx.TransportError:  # ConnectError, ReadTimeout, etc.
+                if attempt == self._max_retries:
+                    raise
+            time.sleep(self._backoff * (2 ** attempt))
+        raise RuntimeError("unreachable")  # pragma: no cover
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ChatMessage:
         # Pin temperature for reproducible reviews (merge-gate determinism).
@@ -79,8 +106,7 @@ class OllamaClient:
         }
         if tools:
             body["tools"] = tools
-        resp = httpx.post(self._url, json=body, timeout=self._timeout, headers=self._headers)
-        resp.raise_for_status()
+        resp = self._post_with_retry(body)
         msg = resp.json().get("message")
         if not msg:  # no message (model unloaded / context overflow) — no crash
             return ChatMessage(content="", tool_calls=[])
