@@ -199,6 +199,59 @@ def test_dedup_distinct_lines_not_merged():
     assert len(dedup(items, bucket=5)) == 2
 
 
+def test_dedup_merges_same_symptom_different_titles():
+    # Same bug phrased differently by two finders -> one finding.
+    from kagura_code_reviewer.review.harness import dedup
+    items = [
+        _F("a.py", 13, "ZeroDivisionError in average_order_value", Severity.HIGH, "linescan"),
+        _F("a.py", 14, "Division by zero when orders is empty", Severity.CRITICAL, "cross-file"),
+    ]
+    out = dedup(items, bucket=5)
+    assert len(out) == 1
+    assert out[0].severity is Severity.CRITICAL
+    assert out[0].merge_count == 2
+    assert set(out[0].angles) == {"linescan", "cross-file"}
+
+
+def test_dedup_merges_same_symptom_across_bucket_boundary():
+    # Lines 9 and 10 fall in different fixed buckets but are adjacent.
+    from kagura_code_reviewer.review.harness import dedup
+    items = [
+        _F("a.py", 9, "Division by zero in average", Severity.HIGH, "linescan"),
+        _F("a.py", 10, "ZeroDivisionError when list empty", Severity.HIGH, "cross-file"),
+    ]
+    assert len(dedup(items, bucket=5)) == 1
+
+
+def test_dedup_keeps_distinct_symptoms_at_adjacent_lines():
+    # Different exception classes at adjacent lines must NOT be merged.
+    from kagura_code_reviewer.review.harness import dedup
+    items = [
+        _F("a.py", 40, "ZeroDivisionError from average_order_value", Severity.HIGH),
+        _F("a.py", 41, "IndexError from latest_order", Severity.HIGH),
+    ]
+    assert len(dedup(items, bucket=5)) == 2
+
+
+def test_dedup_unknown_symptom_falls_back_to_title():
+    # No recognized symptom class -> distinct titles stay distinct.
+    from kagura_code_reviewer.review.harness import dedup
+    items = [
+        _F("a.py", 5, "Confusing variable name", Severity.LOW),
+        _F("a.py", 6, "Magic number used", Severity.LOW),
+    ]
+    assert len(dedup(items, bucket=5)) == 2
+
+
+def test_dedup_same_symptom_far_lines_not_merged():
+    from kagura_code_reviewer.review.harness import dedup
+    items = [
+        _F("a.py", 10, "KeyError for missing tier", Severity.HIGH),
+        _F("a.py", 100, "KeyError when tier unknown", Severity.HIGH),
+    ]
+    assert len(dedup(items, bucket=5)) == 2
+
+
 # ---- verifier ------------------------------------------------------------
 
 def test_verify_keeps_when_confirmed_plausible_ge_refuted():
