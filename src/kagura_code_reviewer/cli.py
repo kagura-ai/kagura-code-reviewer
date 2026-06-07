@@ -81,16 +81,21 @@ def main(
     effort: Effort = typer.Option(Effort.med, "--effort", help="Review effort: low|med|high."),
     doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
-    spec = _resolve_spec(model, local, cloud)
-
     if doctor:
         from . import doctor as _doctor
-        results = [_doctor.check_ollama(spec.base_url), _doctor.check_model(spec.base_url, spec.ollama_model)]
+        base_url = _local_base_url()
+        hw = detect_hardware()
+        rec = recommend(hw, list_models(base_url), prefer_local=not cloud)
+        results = [_doctor.check_ollama(base_url)]
+        if rec.finder:
+            results.append(_doctor.check_model(base_url, rec.finder))
         for r in results:
             mark = "OK " if r.ok else "FAIL"
             typer.echo(f"[{mark}] {r.name}: {r.detail}")
+        typer.echo(_doctor.format_hardware_report(hw, rec))
         raise typer.Exit(code=0 if all(r.ok for r in results) else 1)
 
+    spec = _resolve_spec(model, local, cloud)
     tools = RepoTools(repo)
     try:
         diff = tools.git_diff(base, head, paths or None)

@@ -17,6 +17,20 @@ def _ollama_root(base_url: str) -> str:
     return base_url[: -len("/v1")] if base_url.rstrip("/").endswith("/v1") else base_url.rstrip("/")
 
 
+def format_hardware_report(hardware, recommendation) -> str:
+    lines = [
+        f"hardware: VRAM {hardware.vram_mb} MB, RAM {hardware.ram_mb} MB, "
+        f"{hardware.cpu_threads} threads, GPU={'yes' if hardware.has_gpu else 'no'}",
+    ]
+    if recommendation.finder:
+        lines.append(
+            f"recommended local model: {recommendation.finder} — {recommendation.reason}"
+        )
+    else:
+        lines.append(f"recommendation: {recommendation.reason}")
+    return "\n".join(lines)
+
+
 def check_ollama(base_url: str) -> CheckResult:
     root = _ollama_root(base_url)
     try:
