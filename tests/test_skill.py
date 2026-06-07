@@ -2,7 +2,7 @@ import json
 
 from kagura_code_reviewer.agent import ChatMessage, ToolCall
 from kagura_code_reviewer.report import Severity
-from kagura_code_reviewer.review.skill import review
+from kagura_code_reviewer.review.skill import SYSTEM_PROMPT, build_messages, review
 
 
 class ScriptedClient:
@@ -25,6 +25,21 @@ class StubRepo:
 
     def list_files(self, subdir="."):
         return ["a.py"]
+
+
+def test_build_messages_wraps_untrusted_content(monkeypatch):
+    """DIFF and memory context are attacker-influenceable; they must be fenced as
+    untrusted data (prompt-injection hardening, CSO)."""
+    msgs = build_messages(diff="DIFFBODY", context="CTXBODY")
+    user = msgs[1]["content"]
+    assert "BEGIN UNTRUSTED DIFF" in user and "END UNTRUSTED DIFF" in user
+    assert "BEGIN UNTRUSTED MEMORY CONTEXT" in user and "END UNTRUSTED MEMORY CONTEXT" in user
+    assert "DIFFBODY" in user and "CTXBODY" in user
+
+
+def test_system_prompt_forbids_obeying_untrusted_content():
+    assert "UNTRUSTED" in SYSTEM_PROMPT
+    assert "instruction" in SYSTEM_PROMPT.lower()
 
 
 def test_review_returns_report_from_submit(monkeypatch):
