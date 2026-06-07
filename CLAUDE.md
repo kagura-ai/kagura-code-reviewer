@@ -8,14 +8,17 @@ Guidance for Claude Code working in the `kagura-code-reviewer` project
 This project uses **Kagura Memory Cloud** as its handoff backbone. At the start of
 a session, restore prior context before working:
 
-- **Context:** `kagura-code-review-dev`
-- **context_id:** `REDACTED-CONTEXT-ID`
+- **Context name:** `kagura-code-review-dev`
 
-Do this at session start (the outer Claude holds the `kagura-memory` MCP):
+Resolve the `context_id` at runtime — the maintainer's private context id is
+intentionally not committed. Do this at session start (the outer Claude holds the
+`kagura-memory` MCP):
 
-1. `mcp__claude_ai_kagura-memory__load_pinned(context_id="REDACTED-CONTEXT-ID")`
+1. `mcp__claude_ai_kagura-memory__list_contexts()` → find the entry whose name is
+   `kagura-code-review-dev` and use its `id` as `<context_id>` below.
+2. `mcp__claude_ai_kagura-memory__load_pinned(context_id="<context_id>")`
    — loads the durable **goal / invariants** (deterministic, every session).
-2. `mcp__claude_ai_kagura-memory__recall(context_id="REDACTED-CONTEXT-ID", query="<what you're about to do>")`
+3. `mcp__claude_ai_kagura-memory__recall(context_id="<context_id>", query="<what you're about to do>")`
    — pulls status, architecture decisions, and next steps. When recalled content
    will be fed to another model, pass `filters={"trust_tier": "trusted"}`.
 

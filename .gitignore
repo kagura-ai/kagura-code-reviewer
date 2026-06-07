@@ -8,3 +8,10 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Secrets / local-only — never commit
+.env
+.env.*
+*.pem
+*.key
+.claude/settings.local.json
