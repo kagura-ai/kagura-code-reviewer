@@ -229,3 +229,17 @@ def test_cli_seed_threads_to_client(repo: Path, monkeypatch):
     monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
     result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--seed", "7"])
     assert result.exit_code == 0 and captured["seed"] == 7
+
+
+def test_cli_auto_persists_recommendation(repo: Path, monkeypatch, tmp_path):
+    import kagura_code_reviewer.config as cfgmod
+    target = tmp_path / "u.toml"
+    monkeypatch.setattr(cfgmod, "_USER", target)
+    monkeypatch.setattr(cli_mod, "_USER", target)  # _no_user_config() -> True
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--auto"])
+    assert result.exit_code == 0
+    assert target.is_file()
+    assert "qwen2.5-coder:7b" in target.read_text()

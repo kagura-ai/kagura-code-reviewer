@@ -58,3 +58,15 @@ def resolve_model(alias: str | None, local: bool, config: dict | None = None) ->
 
 def spec_from_model_name(name: str, base_url: str, num_ctx: int = 8192) -> ModelSpec:
     return ModelSpec(alias="auto", ollama_model=name, base_url=base_url, num_ctx=num_ctx)
+
+
+def write_user_model(name: str, base_url: str, num_ctx: int, path: Path | None = None) -> Path:
+    """Persist the advisor's pick as the user config's default `auto` model alias."""
+    target = path or _USER
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        f'default_alias = "auto"\n\n[models.auto]\n'
+        f'ollama_model = "{name}"\nbase_url = "{base_url}"\nnum_ctx = {int(num_ctx)}\n',
+        encoding="utf-8",
+    )
+    return target
