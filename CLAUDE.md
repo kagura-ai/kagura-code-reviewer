@@ -1,6 +1,7 @@
 # CLAUDE.md
 
-Guidance for Claude Code working in the `kagura-code-review` repository.
+Guidance for Claude Code working in the `kagura-code-reviewer` project
+(repo dir: `~/works/kagura-code-review`; package/CLI: `kagura-code-reviewer`).
 
 ## Session bootstrap — load the handoff from Kagura Memory
 
@@ -24,27 +25,52 @@ At the end of meaningful work, write back: `remember(...)` durable decisions
 
 ## What this project is
 
-A cost-free **Ollama-powered code-review agent CLI** for Claude Code. The review
-brain runs on Ollama (cloud/local) → no Anthropic billing. It reviews a git diff
-**in-repo** (sandboxed `read_file`/`grep`/`git_diff`/`list_files`) and returns a
-structured report. Memory is handled by the **outer Claude** via the slash
-command, not by this package.
+A **pro-grade, Ollama-first code-review agent CLI** for Claude Code. It reviews a
+git diff **in-repo** (sandboxed `read_file`/`grep`/`git_diff`/`list_files`) and
+returns a structured report.
 
-See the design docs:
-- Spec: `docs/superpowers/specs/2026-06-06-kagura-code-review-design.md`
-- Plan: `docs/superpowers/plans/2026-06-06-kagura-code-review.md`
+Quality comes from a **harness** (`review/harness.py`), not model size:
+multi-angle finders → ensemble union → adversarial majority-vote verify → dedup
+→ rank/cap. Effort tiers `low|med|high` (default `med`).
+
+Backends are pluggable behind the `ChatClient` protocol (`agent.py`):
+- **Default = free local Ollama.** An **advisor** (`advisor.py`) auto-selects the
+  best local model for the detected hardware (e.g. `qwen3.5:27b` on a 24 GB GPU).
+- **Opt-in paid providers** via `--provider {openai,anthropic,gemini}`
+  (`providers/`). API keys come from **environment variables only** — never
+  stored in config or memory.
+
+Cost note: "free" applies to **local** Ollama only. Ollama cloud models and the
+OpenAI/Anthropic/Gemini providers are **paid**. Memory is handled by the **outer
+Claude** via the slash command, not by this package.
+
+See the design docs in `docs/superpowers/specs/` and `docs/superpowers/plans/`:
+- v1: `2026-06-06-kagura-code-review-*`
+- (1) harness: `2026-06-06-review-harness-*`
+- (2) advisor: `2026-06-07-model-hardware-advisor-*`
+- (4) multi-provider: `2026-06-07-multiprovider-*`
 
 ## Dev commands
 
 ```bash
-.venv/bin/pytest -q          # run the test suite (36 tests)
-.venv/bin/kagura-code-review --help
-.venv/bin/kagura-code-review --doctor          # check ollama daemon + model
-.venv/bin/kagura-code-review --base main       # review current branch vs main
+.venv/bin/pytest -q                                  # run the test suite (94 tests)
+.venv/bin/kagura-code-reviewer --help
+.venv/bin/kagura-code-reviewer --doctor              # daemon + model + hardware + recommendation
+.venv/bin/kagura-code-reviewer --base main           # review branch vs main (free local, advisor picks model)
+.venv/bin/kagura-code-reviewer --base main --effort high
+.venv/bin/kagura-code-reviewer --base main --provider anthropic   # paid; needs $ANTHROPIC_API_KEY
 ```
 
-## Status (2026-06-06)
+## Status (2026-06-07)
 
-v1 complete on branch `feat/v1-implementation` (not yet merged; no `origin`
-remote). 36 tests pass. Next: finish the branch (merge or `gh repo create` + PR),
-then v2 `--background`. See the `category:next-steps` memory for the full list.
+All merged to `main` (94 tests pass): v1 (merge-gate blocker fixes) + (1) review
+harness + (2) model/hardware advisor + rename to `kagura-code-reviewer` +
+(4) multi-provider backends. No `origin` remote yet.
+
+Remaining: **(3) finishing touches** — finding provenance in the report,
+determinism-mode UX, persist the advisor recommendation (`--auto`/`init`), and
+clean up the residual v1 medium/low issues (empty-`choices` IndexError,
+`git ls-files` flag injection, silent read/grep truncation, doctor trailing
+slash, `--out` double echo, config encoding). See the `category:next-steps`
+memory for the full list.
+```
