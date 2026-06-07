@@ -1,0 +1,107 @@
+from kagura_code_reviewer.advisor import Hardware, detect_hardware
+
+
+def test_detect_hardware_uses_injected_probes():
+    hw = detect_hardware(
+        vram_reader=lambda: 24564,
+        ram_reader=lambda: 96000,
+        cpu_reader=lambda: 32,
+    )
+    assert hw == Hardware(vram_mb=24564, ram_mb=96000, cpu_threads=32, has_gpu=True)
+
+
+def test_detect_hardware_no_gpu_when_vram_zero():
+    hw = detect_hardware(vram_reader=lambda: 0, ram_reader=lambda: 8000, cpu_reader=lambda: 4)
+    assert hw.has_gpu is False
+    assert hw.vram_mb == 0
+
+
+def test_detect_hardware_swallows_probe_errors():
+    def boom():
+        raise RuntimeError("no tool")
+    hw = detect_hardware(vram_reader=boom, ram_reader=boom, cpu_reader=boom)
+    assert hw == Hardware(vram_mb=0, ram_mb=0, cpu_threads=1, has_gpu=False)
+
+
+from kagura_code_reviewer.advisor import ModelCap, is_cloud, lookup_cap
+
+
+def test_is_cloud():
+    assert is_cloud("qwen3-coder:480b-cloud") is True
+    assert is_cloud("kimi-k2.6:cloud") is True
+    assert is_cloud("qwen2.5-coder:14b") is False
+
+
+def test_lookup_cap_exact_then_family_then_default():
+    exact = lookup_cap("qwen2.5-coder:14b")
+    assert exact.tool_calling == "good" and exact.vram_mb == 9000
+    family = lookup_cap("qwen2.5-coder:3b")
+    assert family.tool_calling in {"good", "fair"}
+    default = lookup_cap("totally-unknown:1b")
+    assert isinstance(default, ModelCap) and default.review <= 0.4
+
+
+from pytest_httpserver import HTTPServer
+from kagura_code_reviewer.advisor import list_models
+
+
+def test_list_models_parses_tags(httpserver: HTTPServer):
+    httpserver.expect_request("/api/tags").respond_with_json(
+        {"models": [{"name": "qwen2.5-coder:14b"}, {"name": "qwen3-coder:480b-cloud"}]}
+    )
+    names = list_models(httpserver.url_for("/v1"))
+    assert names == ["qwen2.5-coder:14b", "qwen3-coder:480b-cloud"]
+
+
+def test_list_models_returns_empty_on_error():
+    assert list_models("http://127.0.0.1:9/v1") == []
+
+
+from kagura_code_reviewer.advisor import Recommendation, recommend
+
+_INSTALLED = [
+    "qwen3.5:27b", "qwen2.5-coder:14b", "qwen2.5-coder:7b",
+    "deepseek-r1:32b", "qwen3-coder:480b-cloud",
+]
+
+
+def test_recommend_picks_strongest_local_that_fits_24gb():
+    hw = Hardware(vram_mb=24564, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, _INSTALLED, prefer_local=True)
+    assert rec.finder == "qwen3.5:27b"
+    assert rec.verifier == "qwen3.5:27b"
+    assert rec.fits is True
+
+
+def test_recommend_excludes_models_over_vram_on_8gb():
+    hw = Hardware(vram_mb=8000, ram_mb=32000, cpu_threads=8, has_gpu=True)
+    rec = recommend(hw, _INSTALLED, prefer_local=True)
+    assert rec.finder == "qwen2.5-coder:7b"
+    assert rec.fits is True
+
+
+def test_recommend_ram_fallback_when_no_gpu():
+    hw = Hardware(vram_mb=0, ram_mb=40000, cpu_threads=16, has_gpu=False)
+    rec = recommend(hw, _INSTALLED, prefer_local=True)
+    assert rec.finder == "qwen3.5:27b"
+    assert rec.fits is False
+
+
+def test_recommend_excludes_poor_tool_calling():
+    hw = Hardware(vram_mb=24000, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, ["deepseek-r1:32b"], prefer_local=True)
+    assert rec.finder is None
+    assert "no suitable" in rec.reason.lower()
+
+
+def test_recommend_empty_installed():
+    hw = Hardware(vram_mb=24000, ram_mb=96000, cpu_threads=32, has_gpu=True)
+    rec = recommend(hw, [], prefer_local=True)
+    assert rec.finder is None
+
+
+def test_recommend_cloud_mode_picks_best_cloud():
+    hw = Hardware(vram_mb=0, ram_mb=8000, cpu_threads=8, has_gpu=False)
+    rec = recommend(hw, _INSTALLED, prefer_local=False)
+    assert rec.finder == "qwen3-coder:480b-cloud"
+    assert rec.fits is True

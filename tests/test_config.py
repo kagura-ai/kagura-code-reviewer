@@ -24,3 +24,13 @@ def test_shipped_config_has_effort_tiers():
     cfg = load_config()
     assert set(cfg["effort"]) >= {"low", "med", "high"}
     assert cfg["effort"]["med"]["max_findings"] == 10
+
+
+def test_spec_from_model_name_builds_spec():
+    from kagura_code_reviewer.config import ModelSpec, spec_from_model_name
+    spec = spec_from_model_name("qwen3.5:27b", "http://localhost:11434/v1", num_ctx=32768)
+    assert isinstance(spec, ModelSpec)
+    assert spec.ollama_model == "qwen3.5:27b"
+    assert spec.base_url == "http://localhost:11434/v1"
+    assert spec.num_ctx == 32768
+    assert spec.alias == "auto"

@@ -127,3 +127,66 @@ def test_cli_effort_option_invokes_harness(repo: Path, monkeypatch):
     )
     assert result.exit_code == 0
     assert captured["tier"] == "high"
+
+
+from kagura_code_reviewer.advisor import Recommendation
+from kagura_code_reviewer.report import Report
+
+
+@pytest.fixture(autouse=True)
+def _stub_advisor(monkeypatch):
+    """Keep the advisor default path offline/deterministic for all CLI tests."""
+    monkeypatch.setattr(cli_mod, "list_models", lambda base_url: ["qwen2.5-coder:7b"], raising=False)
+    monkeypatch.setattr(
+        cli_mod, "recommend",
+        lambda hw, installed, prefer_local=True: Recommendation(
+            "qwen2.5-coder:7b", "qwen2.5-coder:7b", "stub", True),
+        raising=False,
+    )
+
+
+def test_cli_zero_config_uses_advisor(repo: Path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(
+        cli_mod, "recommend",
+        lambda hw, installed, prefer_local=True: Recommendation(
+            "qwen3.5:27b", "qwen3.5:27b", "fits GPU VRAM", True),
+    )
+
+    def spy_factory(spec, timeout):
+        captured["model"] = spec.ollama_model
+        return object()
+    monkeypatch.setattr(cli_mod, "client_factory", spy_factory)
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
+    assert result.exit_code == 0
+    assert captured["model"] == "qwen3.5:27b"
+    assert "Auto-selected" in result.output
+
+
+def test_cli_explicit_model_skips_advisor(repo: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: object())
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+
+    def boom_recommend(*a, **k):
+        raise AssertionError("advisor must not run when --model is given")
+    monkeypatch.setattr(cli_mod, "recommend", boom_recommend)
+
+    result = CliRunner().invoke(
+        cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--model", "review-local"])
+    assert result.exit_code == 0
+
+
+def test_cli_advisor_none_exits_with_guidance(repo: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout: object())
+    monkeypatch.setattr(
+        cli_mod, "recommend",
+        lambda hw, installed, prefer_local=True: Recommendation(None, None, "no suitable local model", False))
+
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
+    assert result.exit_code != 0
+    assert "no suitable" in result.output
