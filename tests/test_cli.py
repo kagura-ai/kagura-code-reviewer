@@ -94,7 +94,7 @@ def test_cli_handles_ollama_failure(repo: Path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
     assert result.exit_code == 3
-    assert "Ollama request failed" in result.output
+    assert "request failed" in result.output
 
 
 def test_cli_doctor_flag(monkeypatch, tmp_path: Path):
@@ -190,3 +190,29 @@ def test_cli_advisor_none_exits_with_guidance(repo: Path, monkeypatch):
     result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
     assert result.exit_code != 0
     assert "no suitable" in result.output
+
+
+def test_cli_provider_openai_uses_compat_client(repo: Path, monkeypatch):
+    captured = {}
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-live")
+
+    def spy_build(provider, model, local, cloud, timeout):
+        captured["provider"] = provider
+        return object(), "gpt-4o"
+    monkeypatch.setattr(cli_mod, "build_review_client", spy_build)
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo),
+                                              "--provider", "openai"])
+    assert result.exit_code == 0
+    assert captured["provider"] == "openai"
+
+
+def test_cli_provider_missing_key_errors(repo: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo),
+                                              "--provider", "openai"])
+    assert result.exit_code != 0
+    assert "OPENAI_API_KEY" in result.output
