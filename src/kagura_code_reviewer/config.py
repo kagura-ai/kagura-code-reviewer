@@ -54,3 +54,7 @@ def resolve_model(alias: str | None, local: bool, config: dict | None = None) ->
         base_url=entry["base_url"],
         num_ctx=int(entry.get("num_ctx", 8192)),
     )
+
+
+def spec_from_model_name(name: str, base_url: str, num_ctx: int = 8192) -> ModelSpec:
+    return ModelSpec(alias="auto", ollama_model=name, base_url=base_url, num_ctx=num_ctx)
