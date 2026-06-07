@@ -16,10 +16,12 @@ class OpenAICompatClient:
         timeout: float = 120.0,
         temperature: float = 0.0,
         num_ctx: int | None = None,
+        seed: int | None = None,
     ):
         self.model = model
         self.temperature = temperature
         self.num_ctx = num_ctx
+        self.seed = seed
         self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=timeout)
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> ChatMessage:
@@ -29,6 +31,8 @@ class OpenAICompatClient:
             # Pin temperature for reproducible reviews (merge-gate determinism).
             "temperature": self.temperature,
         }
+        if self.seed is not None:
+            kwargs["seed"] = self.seed
         # num_ctx is an Ollama-specific option; omit for real OpenAI/Gemini (they 400 on it).
         if self.num_ctx is not None:
             kwargs["extra_body"] = {"options": {"num_ctx": self.num_ctx}}
@@ -36,6 +40,8 @@ class OpenAICompatClient:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
         resp = self._client.chat.completions.create(**kwargs)
+        if not resp.choices:  # empty response (model unloaded / context overflow) — no crash
+            return ChatMessage(content="", tool_calls=[])
         msg = resp.choices[0].message
         tool_calls: list[ToolCall] = []
         for tc in msg.tool_calls or []:

@@ -42,3 +42,23 @@ def test_shipped_config_has_providers():
     assert set(cfg["providers"]) >= {"ollama", "openai", "anthropic", "gemini"}
     assert cfg["providers"]["anthropic"]["kind"] == "anthropic"
     assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
+
+
+def test_write_user_model_writes_default_alias(tmp_path, monkeypatch):
+    import kagura_code_reviewer.config as cfgmod
+    target = tmp_path / "cfg.toml"
+    monkeypatch.setattr(cfgmod, "_USER", target)
+    cfgmod.write_user_model("qwen3.5:27b", "http://localhost:11434/v1", 32768)
+    text = target.read_text(encoding="utf-8")
+    assert 'default_alias = "auto"' in text and "qwen3.5:27b" in text
+    cfg = cfgmod.load_config()
+    assert cfg["models"]["auto"]["ollama_model"] == "qwen3.5:27b"
+
+
+def test_load_config_handles_non_ascii_user_file(tmp_path, monkeypatch):
+    import kagura_code_reviewer.config as cfgmod
+    target = tmp_path / "u.toml"
+    target.write_text('# コメント\ndefault_alias = "review-local"\n', encoding="utf-8")
+    monkeypatch.setattr(cfgmod, "_USER", target)
+    cfg = cfgmod.load_config()
+    assert cfg["default_alias"] == "review-local"

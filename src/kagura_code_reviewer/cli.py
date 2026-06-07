@@ -9,6 +9,7 @@ import httpx
 import openai
 import typer
 
+from . import config as _config
 from .advisor import detect_hardware, list_models, lookup_cap, recommend
 from .config import _USER, load_config, resolve_model, spec_from_model_name
 from .ollama_client import OllamaClient
@@ -38,12 +39,13 @@ class Provider(str, Enum):
     gemini = "gemini"
 
 
-def client_factory(spec, timeout: float):
+def client_factory(spec, timeout: float, seed: int | None = None):
     return OllamaClient(
         base_url=spec.base_url,
         model=spec.ollama_model,
         num_ctx=spec.num_ctx,
         timeout=timeout,
+        seed=seed,
     )
 
 
@@ -74,12 +76,16 @@ def _resolve_spec(model: str | None, local: bool, cloud: bool):
     return resolve_model(None, local=False)
 
 
-def build_review_client(provider: str, model: str | None, local: bool, cloud: bool, timeout: float):
+def build_review_client(provider: str, model: str | None, local: bool, cloud: bool,
+                        timeout: float, seed: int | None = None, auto: bool = False):
     """Return (client, model_label). Ollama keeps the advisor default path; other
     providers read their API key from the environment only (never stored)."""
     if provider == "ollama":
         spec = _resolve_spec(model, local, cloud)
-        return client_factory(spec, timeout), spec.ollama_model
+        if auto and model is None and not cloud:
+            path = _config.write_user_model(spec.ollama_model, spec.base_url, spec.num_ctx)
+            typer.echo(f"Persisted model '{spec.ollama_model}' to {path}", err=True)
+        return client_factory(spec, timeout, seed), spec.ollama_model
     cfg = load_config().get("providers", {}).get(provider, {})
     key_env = cfg.get("api_key_env", "")
     api_key = os.environ.get(key_env, "") if key_env else ""
@@ -98,7 +104,7 @@ def build_review_client(provider: str, model: str | None, local: bool, cloud: bo
                                max_tokens=int(cfg.get("max_tokens", 4096)),
                                timeout=timeout), chosen
     return OpenAICompatClient(base_url=cfg["base_url"], model=chosen,
-                              api_key=api_key, timeout=timeout), chosen
+                              api_key=api_key, timeout=timeout, seed=seed), chosen
 
 
 @app.command()
@@ -117,6 +123,8 @@ def main(
     max_iters: int = typer.Option(12, help="Max agent iterations."),
     effort: Effort = typer.Option(Effort.med, "--effort", help="Review effort: low|med|high."),
     provider: Provider = typer.Option(Provider.ollama, "--provider", help="Backend: ollama|openai|anthropic|gemini."),
+    seed: int = typer.Option(None, "--seed", help="Seed for reproducible local reviews."),
+    auto: bool = typer.Option(False, "--auto", help="Persist the advisor's model pick to user config."),
     doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
     if doctor:
@@ -144,7 +152,8 @@ def main(
         raise typer.Exit(code=0)
 
     context = context_file.read_text() if context_file and context_file.is_file() else None
-    client, model_label = build_review_client(provider.value, model, local, cloud, timeout)
+    client, model_label = build_review_client(provider.value, model, local, cloud,
+                                              timeout, seed=seed, auto=auto)
 
     tier = resolve_tier(effort.value, config=load_config())
     try:
@@ -165,5 +174,6 @@ def main(
 
     if out:
         out.write_text(rendered)
-    typer.echo(rendered)
+    else:
+        typer.echo(rendered)
     raise typer.Exit(code=report.exit_code())

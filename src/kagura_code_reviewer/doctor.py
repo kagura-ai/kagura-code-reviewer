@@ -14,7 +14,8 @@ class CheckResult:
 
 def _ollama_root(base_url: str) -> str:
     # Accept either ".../v1" or bare host root; /api lives at the host root.
-    return base_url[: -len("/v1")] if base_url.rstrip("/").endswith("/v1") else base_url.rstrip("/")
+    b = base_url.rstrip("/")
+    return b[: -len("/v1")] if b.endswith("/v1") else b
 
 
 def format_hardware_report(hardware, recommendation) -> str:

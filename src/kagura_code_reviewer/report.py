@@ -45,6 +45,9 @@ class Finding:
             "title": self.title,
             "rationale": self.rationale,
             "suggestion": self.suggestion,
+            "angles": self.angles,
+            "votes": self.votes,
+            "merge_count": self.merge_count,
         }
 
 
@@ -84,5 +87,11 @@ class Report:
             lines.append(f"## [{f.severity.name}] {f.title} ({f.dimension})")
             lines.append(f"- **Where:** `{loc}`")
             lines.append(f"- **Why:** {f.rationale}")
-            lines.append(f"- **Fix:** {f.suggestion}\n")
+            lines.append(f"- **Fix:** {f.suggestion}")
+            if f.angles or f.votes or f.merge_count > 1:
+                seen = ", ".join(f.angles) if f.angles else "—"
+                count = f" ×{f.merge_count}" if f.merge_count > 1 else ""
+                votes = ("; votes: " + ", ".join(f"{k} {v}" for k, v in f.votes.items())) if f.votes else ""
+                lines.append(f"- **Seen by:** {seen}{count}{votes}")
+            lines.append("")
         return "\n".join(lines)
