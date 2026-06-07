@@ -1,0 +1,23 @@
+{
+  "name": "kagura-code-reviewer",
+  "version": "0.1.1",
+  "description": "Cost-free, Ollama-first code-review agent for Claude Code — reviews a git diff in-repo via a multi-angle finder/verify harness and returns a structured, machine-readable report.",
+  "author": {
+    "name": "Kagura AI, Inc.",
+    "url": "https://github.com/kagura-ai"
+  },
+  "homepage": "https://github.com/kagura-ai/kagura-code-reviewer",
+  "repository": "https://github.com/kagura-ai/kagura-code-reviewer",
+  "license": "Apache-2.0",
+  "keywords": [
+    "code-review",
+    "ollama",
+    "llm",
+    "claude-code",
+    "static-analysis",
+    "developer-tools",
+    "ci",
+    "ai"
+  ],
+  "commands": ["./.claude/commands/"]
+}
