@@ -42,6 +42,21 @@ def test_system_prompt_forbids_obeying_untrusted_content():
     assert "instruction" in SYSTEM_PROMPT.lower()
 
 
+def test_build_messages_marks_truncated_context():
+    """Oversized grounding is cut VISIBLY (marker the model sees) rather than
+    silently dropped by the context window."""
+    msgs = build_messages(diff="d", context="X" * 50000)
+    user = msgs[1]["content"]
+    assert "[memory context truncated]" in user
+    assert user.count("X") < 50000
+
+
+def test_build_messages_keeps_small_context_intact():
+    msgs = build_messages(diff="d", context="SMALL-RULE")
+    user = msgs[1]["content"]
+    assert "SMALL-RULE" in user and "truncated" not in user
+
+
 def test_review_returns_report_from_submit(monkeypatch):
     payload = {"findings": [
         {"dimension": "security", "severity": "high", "file": "a.py",
