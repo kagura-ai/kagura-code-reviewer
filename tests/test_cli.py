@@ -147,6 +147,7 @@ def _stub_advisor(monkeypatch):
 
 def test_cli_zero_config_uses_advisor(repo: Path, monkeypatch):
     captured = {}
+    monkeypatch.setattr(cli_mod, "_USER", repo / "no-user-config.toml")  # force zero-config path
     monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
     monkeypatch.setattr(
         cli_mod, "recommend",
@@ -180,7 +181,40 @@ def test_cli_explicit_model_skips_advisor(repo: Path, monkeypatch):
     assert result.exit_code == 0
 
 
+def test_resolve_spec_bare_model_tag_falls_back(monkeypatch, tmp_path):
+    """A bare ollama tag (not a config alias) resolves to a direct spec, not KeyError."""
+    import kagura_code_reviewer.config as cfgmod
+    monkeypatch.setattr(cfgmod, "_USER", tmp_path / "none.toml")  # shipped aliases only
+    spec = cli_mod._resolve_spec("qwen3:14b", local=False, cloud=False)
+    assert spec.ollama_model == "qwen3:14b"
+
+
+def test_cli_bare_model_tag_resolves(repo: Path, monkeypatch, tmp_path):
+    """--model with a real ollama tag works end-to-end (no alias required)."""
+    import kagura_code_reviewer.config as cfgmod
+    monkeypatch.setattr(cfgmod, "_USER", tmp_path / "none.toml")
+    monkeypatch.setattr(cli_mod, "_USER", tmp_path / "none.toml")
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    captured = {}
+
+    def spy_factory(spec, timeout, seed=None):
+        captured["model"] = spec.ollama_model
+        return object()
+    monkeypatch.setattr(cli_mod, "client_factory", spy_factory)
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+
+    def boom_recommend(*a, **k):
+        raise AssertionError("advisor must not run when --model is given")
+    monkeypatch.setattr(cli_mod, "recommend", boom_recommend)
+
+    result = CliRunner().invoke(
+        cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "--model", "qwen3:14b"])
+    assert result.exit_code == 0
+    assert captured["model"] == "qwen3:14b"
+
+
 def test_cli_advisor_none_exits_with_guidance(repo: Path, monkeypatch):
+    monkeypatch.setattr(cli_mod, "_USER", repo / "no-user-config.toml")  # force zero-config path
     monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
     monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
     monkeypatch.setattr(
