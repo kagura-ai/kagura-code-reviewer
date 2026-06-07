@@ -61,12 +61,14 @@ See the design docs in `docs/superpowers/specs/` and `docs/superpowers/plans/`:
 .venv/bin/kagura-code-reviewer --base main --provider anthropic   # paid; needs $ANTHROPIC_API_KEY
 ```
 
-**Local context gotcha:** `num_ctx` (config alias / advisor) is *advisory only* — it
-feeds the advisor's VRAM-fit estimate but does **not** change the context Ollama
-loads. Ollama's OpenAI-compat endpoint (`/v1`) ignores per-request `num_ctx`
-(verified on 0.20.2); only the native `/api/chat` honors it. Set the real local
-context via `OLLAMA_CONTEXT_LENGTH` or the model's Modelfile. Making `num_ctx`
-effective (switch the Ollama path to native `/api/chat`) is a tracked enhancement.
+**Local context (`num_ctx`):** the Ollama backend uses the **native `/api/chat`**
+endpoint (`ollama_client.py`), so `num_ctx` (config alias / advisor `cap.ctx`)
+genuinely controls the loaded context window — verified: `num_ctx=8192` →
+`ollama ps` CONTEXT 8192. (The earlier OpenAI-compat `/v1` path silently ignored
+it; that's why we moved off it.) The advisor's VRAM-fit estimate therefore
+reflects the real load. Real OpenAI/Gemini providers still use the `/v1` path and
+do not take `num_ctx`. Possible follow-up: have the advisor *shrink* `num_ctx` to
+fit a larger model in VRAM instead of excluding it.
 
 ## Status (2026-06-07)
 
