@@ -7,7 +7,7 @@ are all welcome.
 ## Dev setup
 
 ```bash
-git clone https://github.com/OWNER/kagura-code-reviewer
+git clone https://github.com/kagura-ai/kagura-code-reviewer
 cd kagura-code-reviewer
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"

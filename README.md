@@ -1,10 +1,10 @@
 # kagura-code-reviewer
 
-<!-- Badges go live once the repo is on GitHub/PyPI. Replace OWNER with your GitHub org/user. -->
+<!-- Badges go live once the repo is on GitHub and the package is on PyPI. -->
 [![PyPI](https://img.shields.io/pypi/v/kagura-code-reviewer.svg)](https://pypi.org/project/kagura-code-reviewer/)
 [![Python](https://img.shields.io/pypi/pyversions/kagura-code-reviewer.svg)](https://pypi.org/project/kagura-code-reviewer/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![CI](https://github.com/OWNER/kagura-code-reviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/kagura-code-reviewer/actions/workflows/ci.yml)
+[![CI](https://github.com/kagura-ai/kagura-code-reviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/kagura-ai/kagura-code-reviewer/actions/workflows/ci.yml)
 
 **Pro-grade code review on your git diff with zero Anthropic billing.** A local (or
 cloud) Ollama model fans out multi-angle finders, adversarially majority-vote
