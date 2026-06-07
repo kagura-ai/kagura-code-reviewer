@@ -117,23 +117,66 @@ def _norm_title(title: str) -> str:
     return re.sub(r"[^a-z0-9]", "", title.lower())
 
 
+# Canonical symptom classes. The same bug is often phrased differently by each
+# finder ("ZeroDivisionError in avg" vs "Division by zero when empty"); keying on
+# the symptom instead of the literal title lets those collapse. Unrecognized
+# findings fall back to the normalized title, so distinct issues are never
+# over-merged just for sharing a location.
+_SYMPTOM_PATTERNS = [
+    ("zerodivision", re.compile(r"zero ?division|divi[a-z]* by zero|divide by zero")),
+    ("index", re.compile(r"index ?error|out of (range|bounds)|index out")),
+    ("key", re.compile(r"key ?error|missing key|unknown key|key.{0,20}(exist|present|found)")),
+    ("none", re.compile(r"\bnone\b|nonetype|\bnull\b|returns? none|silent none")),
+    ("attribute", re.compile(r"attribute ?error")),
+    ("type", re.compile(r"type ?error")),
+    ("value", re.compile(r"value ?error")),
+]
+
+
+def _symptom(f) -> str | None:
+    text = f"{f.title} {f.rationale}".lower()
+    for name, pattern in _SYMPTOM_PATTERNS:
+        if pattern.search(text):
+            return name
+    return None
+
+
+def _merge_cluster(cluster: list) -> object:
+    rep = max(cluster, key=lambda f: f.severity)
+    rep.merge_count = len(cluster)
+    angles: set = set()
+    for f in cluster:
+        angles |= set(f.angles)
+    rep.angles = sorted(angles)
+    return rep
+
+
 def dedup(findings: list, bucket: int = 5) -> list:
-    groups: dict[tuple, object] = {}
+    # Group by (file, symptom-or-title), then split each group into clusters of
+    # lines that chain within `bucket` of each other (fixes fixed-bucket boundary
+    # splits). Line-less findings share one cluster per group, as before.
+    groups: dict[tuple, list] = {}
     for f in findings:
-        line_key = (f.line // bucket) if f.line is not None else -1
-        key = (f.file, line_key, _norm_title(f.title))
-        existing = groups.get(key)
-        if existing is None:
-            f.merge_count = 1
-            groups[key] = f
-            continue
-        existing.merge_count += 1
-        existing.angles = sorted(set(existing.angles) | set(f.angles))
-        if f.severity > existing.severity:
-            f.merge_count = existing.merge_count
-            f.angles = existing.angles
-            groups[key] = f
-    return list(groups.values())
+        key = (f.file, _symptom(f) or _norm_title(f.title))
+        groups.setdefault(key, []).append(f)
+
+    result = []
+    for members in groups.values():
+        no_line = [f for f in members if f.line is None]
+        with_line = sorted((f for f in members if f.line is not None), key=lambda f: f.line)
+        cluster: list = []
+        for f in with_line:
+            if cluster and f.line - cluster[-1].line <= bucket:
+                cluster.append(f)
+            else:
+                if cluster:
+                    result.append(_merge_cluster(cluster))
+                cluster = [f]
+        if cluster:
+            result.append(_merge_cluster(cluster))
+        if no_line:
+            result.append(_merge_cluster(no_line))
+    return result
 
 
 _VALID_VERDICTS = {"CONFIRMED", "PLAUSIBLE", "REFUTED"}
