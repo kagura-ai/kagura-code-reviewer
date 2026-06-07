@@ -39,3 +39,19 @@ def test_lookup_cap_exact_then_family_then_default():
     assert family.tool_calling in {"good", "fair"}
     default = lookup_cap("totally-unknown:1b")
     assert isinstance(default, ModelCap) and default.review <= 0.4
+
+
+from pytest_httpserver import HTTPServer
+from kagura_code_reviewer.advisor import list_models
+
+
+def test_list_models_parses_tags(httpserver: HTTPServer):
+    httpserver.expect_request("/api/tags").respond_with_json(
+        {"models": [{"name": "qwen2.5-coder:14b"}, {"name": "qwen3-coder:480b-cloud"}]}
+    )
+    names = list_models(httpserver.url_for("/v1"))
+    assert names == ["qwen2.5-coder:14b", "qwen3-coder:480b-cloud"]
+
+
+def test_list_models_returns_empty_on_error():
+    assert list_models("http://127.0.0.1:9/v1") == []

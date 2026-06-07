@@ -4,6 +4,10 @@ import os
 import subprocess
 from dataclasses import dataclass
 
+import httpx
+
+from .doctor import _ollama_root
+
 
 @dataclass
 class Hardware:
@@ -79,6 +83,15 @@ _FAMILY_CAPS: dict[str, ModelCap] = {
 }
 
 _DEFAULT_CAP = ModelCap(0.3, "fair", 6000, 8192)
+
+
+def list_models(base_url: str) -> list[str]:
+    try:
+        resp = httpx.get(f"{_ollama_root(base_url)}/api/tags", timeout=3.0)
+        resp.raise_for_status()
+        return [m["name"] for m in resp.json().get("models", []) if m.get("name")]
+    except Exception:
+        return []
 
 
 def is_cloud(name: str) -> bool:
