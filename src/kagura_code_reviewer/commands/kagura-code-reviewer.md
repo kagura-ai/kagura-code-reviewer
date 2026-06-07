@@ -1,5 +1,6 @@
 ---
 description: Run a free Ollama-powered code review with Kagura Memory context
+argument-hint: "[--base <ref>] [--effort low|med|high] [--paths <path>] [--provider ollama|openai|anthropic|gemini]"
 ---
 
 Review the current branch's changes against `main` (or the base the user names).
@@ -20,6 +21,9 @@ Follow these steps:
    - Write the assembled text to `/tmp/kcr-ctx.md`.
 3. **Run the review (free, on Ollama):**
    `kagura-code-reviewer --base main --context-file /tmp/kcr-ctx.md --format md`
+   If the user passed arguments (`$ARGUMENTS`), forward them to the CLI
+   (e.g. `--base`, `--effort`, `--paths`, `--provider`, `--min-confidence`);
+   default to `--base main` when none are given.
 4. **Present the report** to the user.
 5. **Write back ONLY durable value:**
    - `remember(...)` new conventions or recurring findings (not one-off nits);
