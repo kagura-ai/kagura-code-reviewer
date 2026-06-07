@@ -53,7 +53,7 @@ See the design docs in `docs/superpowers/specs/` and `docs/superpowers/plans/`:
 ## Dev commands
 
 ```bash
-.venv/bin/pytest -q                                  # run the test suite (94 tests)
+.venv/bin/pytest -q                                  # run the test suite (116 tests)
 .venv/bin/kagura-code-reviewer --help
 .venv/bin/kagura-code-reviewer --doctor              # daemon + model + hardware + recommendation
 .venv/bin/kagura-code-reviewer --base main           # review branch vs main (free local, advisor picks model)
@@ -63,14 +63,18 @@ See the design docs in `docs/superpowers/specs/` and `docs/superpowers/plans/`:
 
 ## Status (2026-06-07)
 
-All merged to `main` (94 tests pass): v1 (merge-gate blocker fixes) + (1) review
+All merged to `main` (116 tests pass): v1 (merge-gate blocker fixes) + (1) review
 harness + (2) model/hardware advisor + rename to `kagura-code-reviewer` +
-(4) multi-provider backends. No `origin` remote yet.
+(4) multi-provider backends + (3) finishing touches. No `origin` remote yet.
 
-Remaining: **(3) finishing touches** — finding provenance in the report,
-determinism-mode UX, persist the advisor recommendation (`--auto`/`init`), and
-clean up the residual v1 medium/low issues (empty-`choices` IndexError,
-`git ls-files` flag injection, silent read/grep truncation, doctor trailing
-slash, `--out` double echo, config encoding). See the `category:next-steps`
-memory for the full list.
+**(3) finishing touches — done:** finding provenance in md/json reports
+(`e1bb03b`), determinism `--seed` (`6fe0a87`), advisor persistence via `--auto`
+(`a6b9392`), and the residual v1 robustness fixes — empty-`choices` guard,
+`git ls-files` flag injection (`-- subdir`), read/grep truncation markers,
+doctor trailing-slash, `--out` stdout suppression, config utf-8 (`84c729c`).
+Plus extras: confidence scores + `--concurrency` / `--min-confidence` (`dd85a8a`)
+and `Report.from_payload` hardening against non-dict/non-list findings (`1a218b1`).
+
+No major roadmap items outstanding. Next candidates are polish/UX and a real-diff
+dogfood pass — see the `category:next-steps` memory if priorities shift.
 ```
