@@ -102,14 +102,14 @@ def run_finders(client, repo, diff, context, tier, max_iters=12, max_concurrency
             outcomes = list(ex.map(work, jobs))
 
     candidates = [f for o in outcomes for f in o.findings]
-    any_errored = any(o.errored for o in outcomes)
+    errors = [o.error for o in outcomes if o.errored and o.error is not None]
     # Total backend outage: every finder failed and every failure was a
     # connectivity error -> propagate so the CLI shows its friendly message.
     if outcomes and all(o.errored for o in outcomes) and all(
         isinstance(o.error, _BACKEND_ERRORS) for o in outcomes
     ):
         raise outcomes[0].error
-    return candidates, any_errored
+    return candidates, errors
 
 
 def _norm_title(title: str) -> str:
@@ -198,7 +198,7 @@ def _verify_votes_for(finding, tier: EffortTier) -> int:
 
 def review_harness(finder_client, verifier_client, repo, diff, context, tier,
                    max_iters=12, max_concurrency=1, min_confidence=0.0) -> Report:
-    candidates, any_errored = run_finders(
+    candidates, errors = run_finders(
         finder_client, repo, diff, context, tier, max_iters, max_concurrency)
     deduped = dedup(candidates)
 
@@ -213,11 +213,16 @@ def review_harness(finder_client, verifier_client, repo, diff, context, tier,
 
     findings = aggregate(survivors, tier.max_findings, min_confidence)
 
-    if not findings and any_errored:
+    if not findings and errors:
+        counts: dict[str, int] = {}
+        for e in errors:
+            counts[type(e).__name__] = counts.get(type(e).__name__, 0) + 1
+        detail = ", ".join(f"{name}×{n}" for name, n in sorted(counts.items()))
         return Report(findings=[Finding(
             dimension="meta", severity=Severity.HIGH, file="", line=None,
             title="Review incomplete",
-            rationale="One or more finder angles failed and no findings were produced.",
+            rationale=(f"{len(errors)} finder angle(s) failed ({detail}) and no "
+                       "findings were produced."),
             suggestion="Re-run, check the Ollama backend, or lower --effort.",
         )])
     return Report(findings=findings)
