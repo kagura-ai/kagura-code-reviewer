@@ -54,3 +54,25 @@ def test_finding_accepts_provenance():
     assert f.angles == ["cross-file"]
     assert f.votes == {"CONFIRMED": 2}
     assert f.merge_count == 3
+
+
+def test_markdown_shows_provenance_when_present():
+    f = Finding("correctness", Severity.HIGH, "a.py", 2, "bug", "r", "s",
+                angles=["cross-file", "correctness-linescan"],
+                votes={"CONFIRMED": 2}, merge_count=2)
+    md = Report(findings=[f]).to_markdown()
+    assert "cross-file" in md and "CONFIRMED" in md
+
+
+def test_markdown_omits_provenance_when_absent():
+    f = Finding("perf", Severity.LOW, "a.py", 1, "t", "r", "s")
+    md = Report(findings=[f]).to_markdown()
+    assert "Seen by" not in md
+
+
+def test_json_includes_provenance():
+    import json
+    f = Finding("correctness", Severity.HIGH, "a.py", 2, "bug", "r", "s",
+                angles=["reuse"], votes={"PLAUSIBLE": 1}, merge_count=3)
+    d = json.loads(Report(findings=[f]).to_json())["findings"][0]
+    assert d["angles"] == ["reuse"] and d["votes"] == {"PLAUSIBLE": 1} and d["merge_count"] == 3
