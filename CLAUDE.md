@@ -53,7 +53,7 @@ See the design docs in `docs/superpowers/specs/` and `docs/superpowers/plans/`:
 ## Dev commands
 
 ```bash
-.venv/bin/pytest -q                                  # run the test suite (128 tests)
+.venv/bin/pytest -q                                  # run the test suite (132 tests)
 .venv/bin/kagura-code-reviewer --help
 .venv/bin/kagura-code-reviewer --doctor              # daemon + model + hardware + recommendation
 .venv/bin/kagura-code-reviewer --base main           # review branch vs main (free local, advisor picks model)
