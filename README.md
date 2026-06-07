@@ -69,6 +69,32 @@ kagura-code-reviewer --base main --paths src/foo.py --paths tests/test_foo.py
 - `1` — one or more HIGH or CRITICAL findings
 - `2` — git error (bad refs, not a git repo, etc.)
 
+### Machine-readable output contract
+
+`--format json` emits a stable, versioned envelope for downstream automation
+(no need to scrape Markdown). The `findings` key stays top-level for backward
+compatibility; `schema_version` / `verdict` / `summary` are additive.
+
+```jsonc
+{
+  "schema_version": 1,
+  "verdict": "green",        // green = clean, yellow = non-blocking only, red = blocking finding
+  "summary": {
+    "total": 0,
+    "blocking": 0,           // findings with severity >= HIGH
+    "by_severity": {},       // {"HIGH": 2, "LOW": 1, ...}
+    "incomplete": false      // true if the review did not finish (a "meta" finding is present)
+  },
+  "findings": [ /* per-finding: dimension, severity, file, line, title, rationale,
+                   suggestion, angles, votes, merge_count, confidence */ ]
+}
+```
+
+**Verdict ↔ exit-code invariant:** `verdict == "red"` **iff** exit code is `1`.
+`green` and `yellow` both exit `0` (use `verdict` to distinguish clean from
+advisory). `summary.incomplete` lets an actor tell "review failed to run" apart
+from "real blocking findings."
+
 ---
 
 ## Slash-command / Kagura Memory workflow

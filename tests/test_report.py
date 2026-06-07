@@ -17,6 +17,43 @@ def test_exit_code_nonzero_when_high_or_above():
     assert r.exit_code() == 1
 
 
+def test_verdict_green_yellow_red():
+    assert Report(findings=[]).verdict() == "green"
+    assert Report(findings=[Finding("style", Severity.LOW, "a.py", 1, "t", "r", "s")]).verdict() == "yellow"
+    assert Report(findings=[Finding("sec", Severity.HIGH, "a.py", 1, "t", "r", "s")]).verdict() == "red"
+
+
+def test_verdict_red_iff_exit_code_one():
+    # invariant: an actor can rely on red <-> exit 1
+    for findings in ([], [Finding("s", Severity.MEDIUM, "a", 1, "t", "r", "s")],
+                     [Finding("s", Severity.CRITICAL, "a", 1, "t", "r", "s")]):
+        r = Report(findings=findings)
+        assert (r.verdict() == "red") == (r.exit_code() == 1)
+
+
+def test_json_envelope_has_schema_verdict_summary():
+    import json
+    r = Report(findings=[
+        Finding("sec", Severity.HIGH, "a.py", 1, "t", "r", "s"),
+        Finding("style", Severity.LOW, "b.py", 2, "t", "r", "s"),
+    ])
+    d = json.loads(r.to_json())
+    assert d["schema_version"] >= 1
+    assert d["verdict"] == "red"
+    assert d["summary"]["total"] == 2
+    assert d["summary"]["blocking"] == 1
+    assert d["summary"]["by_severity"]["HIGH"] == 1
+    assert len(d["findings"]) == 2  # findings stays top-level (backward compatible)
+
+
+def test_json_summary_flags_incomplete():
+    import json
+    r = Report(findings=[Finding("meta", Severity.HIGH, "", None, "Review incomplete", "r", "s")])
+    d = json.loads(r.to_json())
+    assert d["summary"]["incomplete"] is True
+    assert d["verdict"] == "red"
+
+
 def test_from_payload_builds_findings():
     payload = {"findings": [
         {"dimension": "security", "severity": "critical", "file": "a.py",
