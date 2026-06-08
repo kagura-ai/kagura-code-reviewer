@@ -5,6 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/kagura-code-reviewer.svg)](https://pypi.org/project/kagura-code-reviewer/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/kagura-ai/kagura-code-reviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/kagura-ai/kagura-code-reviewer/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/kagura-ai/kagura-code-reviewer/graph/badge.svg)](https://codecov.io/gh/kagura-ai/kagura-code-reviewer)
 
 **Pro-grade code review on your git diff with zero Anthropic billing.** A local (or
 cloud) Ollama model fans out multi-angle finders, adversarially majority-vote
