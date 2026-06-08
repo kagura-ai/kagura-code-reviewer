@@ -41,7 +41,7 @@ Issues = "https://github.com/kagura-ai/kagura-code-reviewer/issues"
 Changelog = "https://github.com/kagura-ai/kagura-code-reviewer/releases"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-httpserver>=1.0"]
+dev = ["pytest>=8.0", "pytest-httpserver>=1.0", "pytest-cov>=6.0"]
 
 [project.scripts]
 kagura-code-reviewer = "kagura_code_reviewer.cli:app"

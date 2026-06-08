@@ -28,8 +28,16 @@ jobs:
 
       # The test suite stubs the Ollama/provider backends, so no daemon is
       # needed in CI.
-      - name: Test
-        run: pytest -q
+      - name: Test with coverage
+        run: pytest -q --cov=src/kagura_code_reviewer --cov-report=xml --cov-report=term
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false
 
   version-sync:
     # Guard against version drift across the package manifest and the Claude
