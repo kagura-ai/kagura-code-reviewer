@@ -122,6 +122,53 @@ def test_dictrepo_read_file_error_not_truncated():
     assert msg == "error: file not found: missing.py"  # full error, not sliced to 5
 
 
+def test_dictrepo_read_file_returns_content_capped():
+    from kagura_code_reviewer.eval_cli import _DictRepo
+    repo = _DictRepo({"a.py": "0123456789"})
+    assert repo.read_file("a.py") == "0123456789"
+    assert repo.read_file("a.py", max_bytes=4) == "0123"
+
+
+def test_dictrepo_list_files_filters_subdir():
+    from kagura_code_reviewer.eval_cli import _DictRepo
+    repo = _DictRepo({"a.py": "x", "src/b.py": "y", "src/c.py": "z"})
+    assert repo.list_files() == ["a.py", "src/b.py", "src/c.py"]
+    assert repo.list_files("src") == ["src/b.py", "src/c.py"]
+    assert repo.list_files("src/") == ["src/b.py", "src/c.py"]
+
+
+def test_eval_cli_md_output_to_file(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from kagura_code_reviewer import cli as cli_mod
+    from kagura_code_reviewer import eval_cli
+
+    (tmp_path / "manifest.toml").write_text(textwrap.dedent("""\
+        [[case]]
+        name = "idx"
+        source = "seeded"
+        diff = "d"
+        [[case.bug]]
+        file = "a.py"
+        line = 10
+        symptom = "index"
+        dimension = "correctness"
+        severity = "high"
+    """))
+    monkeypatch.setattr(cli_mod, "build_review_client",
+                        lambda *a, **k: (FakeClient(), "fake-model"), raising=False)
+    out = tmp_path / "report.md"
+    res = CliRunner().invoke(eval_cli.app, [
+        "--golden-dir", str(tmp_path), "--effort", "low",
+        "--format", "md", "--out", str(out),
+    ])
+    assert res.exit_code == 0, res.output
+    text = out.read_text()
+    assert "Eval baseline" in text
+    assert "precision (seeded): mean 100.00%" in text  # _pct rendered the md path
+    assert "By dimension" in text                       # EvalResult.to_markdown ran
+
+
 def test_eval_cli_empty_golden_dir_errors(tmp_path):
     from typer.testing import CliRunner
 
