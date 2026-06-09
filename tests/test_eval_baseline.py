@@ -207,6 +207,14 @@ def test_load_baseline_rejects_missing_summary(tmp_path):
         load_baseline(p)
 
 
+def test_load_baseline_rejects_missing_provenance(tmp_path):
+    p = tmp_path / "no_prov.json"
+    p.write_text(json.dumps({"baseline_schema_version": 1, "summary": {}}),
+                 encoding="utf-8")
+    with pytest.raises(ValueError, match="provenance"):
+        load_baseline(p)
+
+
 def test_load_baseline_rejects_unknown_schema_version(tmp_path):
     p = tmp_path / "future.json"
     p.write_text(json.dumps({"baseline_schema_version": 999, "summary": {},
