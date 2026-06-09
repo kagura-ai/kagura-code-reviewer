@@ -53,3 +53,11 @@ packages = ["src/kagura_code_reviewer"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+# Tests that drive a real Ollama backend are marked `ollama` and excluded from
+# the default (network-free) run via addopts. Run them explicitly with
+# `pytest -m ollama` (needs a local Ollama daemon); this is what the gated eval
+# workflow does. A command-line `-m` overrides the addopts default.
+markers = [
+    "ollama: end-to-end test that drives a real Ollama backend (excluded by default).",
+]
+addopts = "-m 'not ollama'"

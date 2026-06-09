@@ -1,0 +1,137 @@
+name: Eval baseline & regression guard
+
+# MANUAL (workflow_dispatch). Drives the REAL review harness over evals/golden and
+# either captures a baseline or gates precision/recall against a committed one.
+#
+# Backend = Ollama Cloud (e.g. qwen3-coder:480b-cloud). Cloud models run
+# server-side, so this needs NO GPU and runs on a stock hosted runner — the local
+# `ollama` daemon is started only to proxy the cloud model. (For a free *local*
+# model instead, set `runner: self-hosted` on a GPU box that already has the model
+# + a signed-in daemon.)
+#
+# Auth: locally the maintainer is authenticated interactively via `ollama signin`.
+# CI cannot run an interactive signin, so it uses the non-interactive equivalent —
+# an Ollama Cloud API key. Prerequisite: create a key at https://ollama.com/settings/keys
+# and add it as the `OLLAMA_API_KEY` repository secret (Settings → Secrets → Actions).
+# Without it the cloud model calls fail auth.
+#
+# Two modes:
+#   capture — run the eval and upload evals/baselines/<model>.json as an artifact
+#             for the maintainer to commit (bootstrap a new baseline).
+#   check   — run the eval and FAIL if precision/recall regress below the committed
+#             baseline's σ-margin floor (requires the baseline file to exist).
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "capture a new baseline, or check against the committed one"
+        required: true
+        default: "check"
+        type: choice
+        options: [check, capture]
+      model:
+        description: "Ollama model (cloud model -> hosted runner; local model -> self-hosted)"
+        required: false
+        default: "qwen3-coder:480b-cloud"
+      effort:
+        description: "Review effort tier"
+        required: false
+        default: "med"
+        type: choice
+        options: [low, med, high]
+      repeats:
+        description: "Repeat runs (finders are stochastic; >=3 recommended)"
+        required: false
+        default: "5"
+      runner:
+        description: "Runner label (ubuntu-latest for cloud models; self-hosted for local GPU models)"
+        required: false
+        default: "ubuntu-latest"
+  # Enable a weekly drift check once a baseline is committed:
+  # schedule:
+  #   - cron: "0 6 * * 1"   # Mondays 06:00 UTC
+
+jobs:
+  eval:
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Start Ollama (proxies the cloud model; no GPU needed)
+        env:
+          # The non-interactive equivalent of `ollama signin`: the daemon reads
+          # OLLAMA_API_KEY to authenticate to Ollama Cloud and proxy the *-cloud
+          # model. If a future Ollama version changes the mechanism, adjust here.
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama serve > /tmp/ollama.log 2>&1 &
+          # wait for the daemon to accept connections
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:11434/api/tags >/dev/null 2>&1 && break
+            sleep 1
+          done
+
+      - name: Resolve baseline path for model
+        id: baseline
+        env:
+          MODEL: ${{ github.event.inputs.model }}
+        run: |
+          set -euo pipefail
+          # Slug must match the committed filename convention: ':' and '/' -> '-'.
+          SLUG=$(printf '%s' "$MODEL" | tr ':/' '--')
+          echo "path=evals/baselines/${SLUG}.json" >> "$GITHUB_OUTPUT"
+
+      - name: Capture baseline
+        if: ${{ github.event.inputs.mode == 'capture' }}
+        env:
+          MODEL: ${{ github.event.inputs.model }}
+          EFFORT: ${{ github.event.inputs.effort }}
+          REPEATS: ${{ github.event.inputs.repeats }}
+          BASELINE_PATH: ${{ steps.baseline.outputs.path }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p evals/baselines
+          kagura-eval --golden-dir evals/golden \
+            --model "$MODEL" --effort "$EFFORT" --repeats "$REPEATS" --seed 7 \
+            --baseline-out "$BASELINE_PATH"
+          echo "::notice::captured baseline -> $BASELINE_PATH (download the artifact and commit it)"
+
+      - name: Upload captured baseline
+        if: ${{ github.event.inputs.mode == 'capture' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-baseline
+          path: ${{ steps.baseline.outputs.path }}
+
+      - name: Check against committed baseline
+        if: ${{ github.event.inputs.mode == 'check' }}
+        env:
+          MODEL: ${{ github.event.inputs.model }}
+          EFFORT: ${{ github.event.inputs.effort }}
+          REPEATS: ${{ github.event.inputs.repeats }}
+          BASELINE_PATH: ${{ steps.baseline.outputs.path }}
+          OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$BASELINE_PATH" ]; then
+            echo "::error::no committed baseline at $BASELINE_PATH — run this workflow in 'capture' mode first, then commit the artifact."
+            ls -1 evals/baselines/ 2>/dev/null || true
+            exit 1
+          fi
+          kagura-eval --golden-dir evals/golden \
+            --model "$MODEL" --effort "$EFFORT" --repeats "$REPEATS" --seed 7 \
+            --check-baseline "$BASELINE_PATH"

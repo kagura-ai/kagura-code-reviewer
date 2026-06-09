@@ -176,3 +176,91 @@ def test_eval_cli_empty_golden_dir_errors(tmp_path):
     (tmp_path / "manifest.toml").write_text("")  # no [[case]] entries
     res = CliRunner().invoke(eval_cli.app, ["--golden-dir", str(tmp_path)])
     assert res.exit_code == 2
+
+
+def _seeded_manifest(tmp_path):
+    (tmp_path / "manifest.toml").write_text(textwrap.dedent("""\
+        [[case]]
+        name = "idx"
+        source = "seeded"
+        diff = "d"
+        [[case.bug]]
+        file = "a.py"
+        line = 10
+        symptom = "index"
+        dimension = "correctness"
+        severity = "high"
+    """))
+
+
+def test_eval_cli_baseline_out_writes_provenance(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from kagura_code_reviewer import cli as cli_mod
+    from kagura_code_reviewer import eval_cli
+
+    _seeded_manifest(tmp_path)
+    monkeypatch.setattr(cli_mod, "build_review_client",
+                        lambda *a, **k: (FakeClient(), "fake-model"), raising=False)
+    out = tmp_path / "baseline.json"
+    res = CliRunner().invoke(eval_cli.app, [
+        "--golden-dir", str(tmp_path), "--effort", "low", "--seed", "7",
+        "--baseline-out", str(out),
+    ])
+    assert res.exit_code == 0, res.output
+    base = json.loads(out.read_text())
+    assert base["baseline_schema_version"] == 1
+    assert base["provenance"]["model"] == "fake-model"
+    assert base["provenance"]["seed"] == 7
+    assert base["guard"]["k_stdev"] == 2.0
+    assert base["summary"]["precision_mean"] == 1.0  # FakeClient catches the seeded bug
+
+
+def test_eval_cli_check_baseline_passes(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from kagura_code_reviewer import cli as cli_mod
+    from kagura_code_reviewer import eval_cli
+    from kagura_code_reviewer.eval_baseline import build_baseline
+
+    _seeded_manifest(tmp_path)
+    monkeypatch.setattr(cli_mod, "build_review_client",
+                        lambda *a, **k: (FakeClient(), "fake-model"), raising=False)
+    # FakeClient scores 1.0/1.0 — clears any floor on the matching model.
+    base = build_baseline(
+        {"summary": {"precision_mean": 0.8, "precision_stdev": 0.1,
+                     "recall_mean": 0.7, "recall_stdev": 0.1}, "runs": []},
+        provenance={"model": "fake-model"})
+    bpath = tmp_path / "b.json"
+    bpath.write_text(json.dumps(base))
+    res = CliRunner().invoke(eval_cli.app, [
+        "--golden-dir", str(tmp_path), "--effort", "low",
+        "--check-baseline", str(bpath),
+    ])
+    assert res.exit_code == 0, res.output
+    assert "PASS" in res.output
+
+
+def test_eval_cli_check_baseline_model_mismatch_exits_1(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from kagura_code_reviewer import cli as cli_mod
+    from kagura_code_reviewer import eval_cli
+    from kagura_code_reviewer.eval_baseline import build_baseline
+
+    _seeded_manifest(tmp_path)
+    monkeypatch.setattr(cli_mod, "build_review_client",
+                        lambda *a, **k: (FakeClient(), "fake-model"), raising=False)
+    # baseline pinned to a DIFFERENT model -> guard refuses to grade -> exit 1
+    base = build_baseline(
+        {"summary": {"precision_mean": 0.8, "precision_stdev": 0.1,
+                     "recall_mean": 0.7, "recall_stdev": 0.1}, "runs": []},
+        provenance={"model": "some-other-model"})
+    bpath = tmp_path / "b.json"
+    bpath.write_text(json.dumps(base))
+    res = CliRunner().invoke(eval_cli.app, [
+        "--golden-dir", str(tmp_path), "--effort", "low",
+        "--check-baseline", str(bpath),
+    ])
+    assert res.exit_code == 1
+    assert "FAIL" in res.output
