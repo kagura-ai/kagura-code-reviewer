@@ -11,11 +11,14 @@ committed baseline number and a CI regression guard are a deliberate follow-up.
 from __future__ import annotations
 
 import json
+import platform
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
 
 from .cli import Effort, OutputFormat, Provider
+from .eval_baseline import build_baseline, check_regression, load_baseline
 from .eval_harness import (
     DEFAULT_BUCKET,
     EvalResult,
@@ -27,6 +30,10 @@ from .eval_harness import (
 )
 from .report import Report
 from .review.harness import resolve_tier, review_harness
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 app = typer.Typer(add_completion=False, help="Measure review-harness quality (FP/FN) on a golden set.")
 
@@ -109,6 +116,12 @@ def main(
     bucket: int = typer.Option(DEFAULT_BUCKET, "--bucket", help="Line-proximity match window."),
     fmt: OutputFormat = typer.Option(OutputFormat.md, "--format", help="Output format."),
     out: Path = typer.Option(None, "--out", help="Write the report here instead of stdout."),
+    baseline_out: Path = typer.Option(
+        None, "--baseline-out",
+        help="Write a committable baseline (summary + provenance + guard) to this path."),
+    check_baseline: Path = typer.Option(
+        None, "--check-baseline",
+        help="Compare this run against a committed baseline; exit 1 on regression."),
 ) -> None:
     cases = load_golden(golden_dir)
     if not cases:
@@ -126,14 +139,16 @@ def main(
                        max_concurrency=concurrency, min_confidence=min_confidence)
     stats = summarize_repeats(results)
 
+    payload = {
+        "model": label,
+        "effort": effort.value,
+        "repeats": repeats,
+        "summary": stats,
+        "runs": [json.loads(r.to_json()) for r in results],
+    }
+
     if fmt is OutputFormat.json:
-        rendered = json.dumps({
-            "model": label,
-            "effort": effort.value,
-            "repeats": repeats,
-            "summary": stats,
-            "runs": [json.loads(r.to_json()) for r in results],
-        }, indent=2)
+        rendered = json.dumps(payload, indent=2)
     else:
         rendered = (f"# Eval baseline — {label} (effort={effort.value}, repeats={repeats})\n\n"
                     f"- precision (seeded): mean {_pct(stats['precision_mean'])} "
@@ -146,6 +161,28 @@ def main(
         out.write_text(rendered, encoding="utf-8")
     else:
         typer.echo(rendered)
+
+    # Optional: persist a committable baseline (summary + provenance + guard).
+    if baseline_out:
+        baseline = build_baseline(payload, provenance={
+            "model": label,
+            "effort": effort.value,
+            "seed": seed,
+            "repeats": repeats,
+            "captured_at": _utc_now(),
+            "host": platform.node(),
+        })
+        baseline_out.write_text(json.dumps(baseline, indent=2), encoding="utf-8")
+        typer.echo(f"wrote baseline → {baseline_out}", err=True)
+
+    # Optional: gate this run against a committed baseline (exit 1 on regression).
+    # The guard report is the primary output of a --check-baseline run, so it goes
+    # to stdout (capturable by pipelines); only the exit code signals pass/fail.
+    if check_baseline:
+        guard = check_regression(load_baseline(check_baseline), stats, fresh_model=label)
+        typer.echo(guard.to_markdown())
+        if not guard.passed:
+            raise typer.Exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover
