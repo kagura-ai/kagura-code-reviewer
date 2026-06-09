@@ -1,6 +1,6 @@
 {
   "name": "kagura-code-reviewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cost-free, Ollama-first code-review agent for Claude Code — reviews a git diff in-repo via a multi-angle finder/verify harness and returns a structured, machine-readable report.",
   "author": {
     "name": "Kagura AI, Inc.",
