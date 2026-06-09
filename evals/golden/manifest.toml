@@ -1,0 +1,164 @@
+# Golden set for the eval harness (issue #5).
+#
+# Seeded cases carry an INTENTIONAL bug introduced by the diff, fully labeled —
+# they score both precision and recall. Historical cases are recall-only (a real
+# diff may carry unknown latent bugs, so false positives are uncountable).
+#
+# `symptom` uses harness._SYMPTOM_PATTERNS canonical names so eval scoring matches
+# the same way the reviewer dedups: zerodivision | index | key | none | attribute
+# | type | value. Keep this set SMALL — running the full harness over each case on
+# local Ollama is slow.
+#
+# Baseline numbers are captured separately (deferred follow-up); this file only
+# defines what "a known bug" means per case.
+
+[[case]]
+name = "zerodiv_mean"
+source = "seeded"
+diff = '''
+--- a/stats.py
++++ b/stats.py
+@@ -1,3 +1,3 @@
+ def mean(values):
+-    return sum(values) / len(values) if values else 0.0
++    return sum(values) / len(values)
+'''
+  [[case.bug]]
+  file = "stats.py"
+  line = 2
+  symptom = "zerodivision"
+  dimension = "correctness"
+  severity = "high"
+
+[[case]]
+name = "index_last_item"
+source = "seeded"
+diff = '''
+--- a/queue.py
++++ b/queue.py
+@@ -1,4 +1,4 @@
+ def last(items):
+-    if not items:
+-        return None
+-    return items[-1]
++    return items[len(items)]
+'''
+  [[case.bug]]
+  file = "queue.py"
+  line = 2
+  symptom = "index"
+  dimension = "correctness"
+  severity = "high"
+
+[[case]]
+name = "key_missing_lookup"
+source = "seeded"
+diff = '''
+--- a/config.py
++++ b/config.py
+@@ -1,2 +1,2 @@
+ def get_timeout(cfg):
+-    return cfg.get("timeout", 30)
++    return cfg["timeout"]
+'''
+  [[case.bug]]
+  file = "config.py"
+  line = 2
+  symptom = "key"
+  dimension = "correctness"
+  severity = "high"
+
+[[case]]
+name = "silent_none_return"
+source = "seeded"
+diff = '''
+--- a/lookup.py
++++ b/lookup.py
+@@ -1,5 +1,5 @@
+ def find_user(users, uid):
+     for u in users:
+         if u.id == uid:
+             return u
+-    raise KeyError(uid)
++    # falls off the end and silently returns None
+'''
+  [[case.bug]]
+  file = "lookup.py"
+  line = 5
+  symptom = "none"
+  dimension = "correctness"
+  severity = "medium"
+
+[[case]]
+name = "attribute_on_none"
+source = "seeded"
+diff = '''
+--- a/session.py
++++ b/session.py
+@@ -1,3 +1,3 @@
+ def name_of(user):
+-    return user.name if user else "anon"
++    return user.name.upper()
+'''
+  [[case.bug]]
+  file = "session.py"
+  line = 2
+  symptom = "attribute"
+  dimension = "correctness"
+  severity = "high"
+
+[[case]]
+name = "type_concat_int_str"
+source = "seeded"
+diff = '''
+--- a/render.py
++++ b/render.py
+@@ -1,2 +1,2 @@
+ def label(count):
+-    return "items: " + str(count)
++    return "items: " + count
+'''
+  [[case.bug]]
+  file = "render.py"
+  line = 2
+  symptom = "type"
+  dimension = "correctness"
+  severity = "medium"
+
+[[case]]
+name = "value_int_parse"
+source = "seeded"
+diff = '''
+--- a/ports.py
++++ b/ports.py
+@@ -1,2 +1,2 @@
+ def parse_port(raw):
+-    return int(raw) if raw.isdigit() else 8080
++    return int(raw)
+'''
+  [[case.bug]]
+  file = "ports.py"
+  line = 2
+  symptom = "value"
+  dimension = "correctness"
+  severity = "medium"
+
+# Historical = recall-only. A real-shaped diff whose known bug we expect the
+# harness to catch; we do NOT score its false positives.
+[[case]]
+name = "historical_offbyone_range"
+source = "historical"
+diff = '''
+--- a/paginate.py
++++ b/paginate.py
+@@ -1,3 +1,3 @@
+ def page_indices(total, size):
+-    return range(0, total, size)
++    return range(0, total + size, size)
+'''
+  [[case.bug]]
+  file = "paginate.py"
+  line = 2
+  symptom = "index"
+  dimension = "correctness"
+  severity = "medium"
