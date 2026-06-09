@@ -20,3 +20,8 @@ htmlcov/
 *.pem
 *.key
 .claude/settings.local.json
+
+# kagura-planner local config (carries the maintainer's private context_id —
+# intentionally not committed, per CLAUDE.md) + generated plan docs
+repo.yaml
+docs/plans/
