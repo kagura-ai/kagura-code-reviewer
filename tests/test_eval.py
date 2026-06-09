@@ -250,6 +250,33 @@ def test_load_golden_missing_diff_raises(tmp_path):
         load_golden(tmp_path)
 
 
+def test_load_golden_missing_name_raises(tmp_path):
+    from kagura_code_reviewer.eval_harness import load_golden
+    (tmp_path / "manifest.toml").write_text(textwrap.dedent("""\
+        [[case]]
+        source = "seeded"
+        diff = "d"
+    """))
+    import pytest
+    with pytest.raises(ValueError):
+        load_golden(tmp_path)
+
+
+def test_load_golden_missing_bug_file_raises(tmp_path):
+    from kagura_code_reviewer.eval_harness import load_golden
+    (tmp_path / "manifest.toml").write_text(textwrap.dedent("""\
+        [[case]]
+        name = "c"
+        source = "seeded"
+        diff = "d"
+        [[case.bug]]
+        symptom = "index"
+    """))
+    import pytest
+    with pytest.raises(ValueError):
+        load_golden(tmp_path)
+
+
 def test_committed_golden_set_loads_and_is_wellformed():
     from pathlib import Path
 

@@ -106,6 +106,22 @@ def test_eval_cli_json_output(tmp_path, monkeypatch):
     assert payload["summary"]["recall_mean"] == 1.0
 
 
+def test_dictrepo_grep_emits_line_numbers():
+    from kagura_code_reviewer.eval_cli import _DictRepo
+    repo = _DictRepo({"a.py": "import os\nx = 1\nuse(os)\n"})
+    out = repo.grep("os")
+    assert "a.py:1: import os" in out
+    assert "a.py:3: use(os)" in out
+    assert "a.py:2:" not in out  # line without the pattern is not emitted
+
+
+def test_dictrepo_read_file_error_not_truncated():
+    from kagura_code_reviewer.eval_cli import _DictRepo
+    repo = _DictRepo({})
+    msg = repo.read_file("missing.py", max_bytes=5)
+    assert msg == "error: file not found: missing.py"  # full error, not sliced to 5
+
+
 def test_eval_cli_empty_golden_dir_errors(tmp_path):
     from typer.testing import CliRunner
 

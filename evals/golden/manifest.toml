@@ -25,7 +25,7 @@ diff = '''
 '''
   [[case.bug]]
   file = "stats.py"
-  line = 3
+  line = 2
   symptom = "zerodivision"
   dimension = "correctness"
   severity = "high"

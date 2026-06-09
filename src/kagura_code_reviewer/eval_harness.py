@@ -297,25 +297,28 @@ def load_golden(path: str | Path) -> list[GoldenCase]:
     data = tomllib.loads(manifest.read_text(encoding="utf-8"))
     cases: list[GoldenCase] = []
     for entry in data.get("case", []):
+        if "name" not in entry:
+            raise ValueError("golden manifest: a [[case]] entry is missing 'name'")
+        name = str(entry["name"])
         diff = entry.get("diff")
         if diff is None and entry.get("diff_file"):
             diff = (root / entry["diff_file"]).read_text(encoding="utf-8")
         if diff is None:
-            raise ValueError(
-                f"golden case {entry.get('name')!r}: needs 'diff' or 'diff_file'")
-        bugs = [
-            GoldenBug(
+            raise ValueError(f"golden case {name!r}: needs 'diff' or 'diff_file'")
+        bugs = []
+        for b in entry.get("bug", []):
+            if "file" not in b:
+                raise ValueError(f"golden case {name!r}: a bug is missing 'file'")
+            bugs.append(GoldenBug(
                 file=str(b["file"]),
                 line=b.get("line"),
                 dimension=str(b.get("dimension", "correctness")),
                 severity=parse_severity(str(b.get("severity", "info"))),
                 symptom=b.get("symptom"),
                 title=str(b.get("title", "")),
-            )
-            for b in entry.get("bug", [])
-        ]
+            ))
         cases.append(GoldenCase(
-            name=str(entry["name"]),
+            name=name,
             diff=diff,
             source=str(entry.get("source", _SEEDED)),
             bugs=bugs,

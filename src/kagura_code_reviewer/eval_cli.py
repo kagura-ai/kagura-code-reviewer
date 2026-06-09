@@ -44,10 +44,18 @@ class _DictRepo:
         self._files = dict(files)
 
     def read_file(self, path: str, max_bytes: int = 20000) -> str:
-        return self._files.get(path, f"error: file not found: {path}")[:max_bytes]
+        if path not in self._files:
+            return f"error: file not found: {path}"  # don't truncate the error
+        return self._files[path][:max_bytes]
 
     def grep(self, pattern: str, max_results: int = 50) -> str:
-        hits = [f"{p}: {c}" for p, c in self._files.items() if pattern in c]
+        # Mirror RepoTools.grep's "path:lineno: line" shape so a finder gets
+        # navigable matches (substring, not regex — safe for an in-memory stub).
+        hits = []
+        for p, content in self._files.items():
+            for i, line in enumerate(content.splitlines(), start=1):
+                if pattern in line:
+                    hits.append(f"{p}:{i}: {line.strip()}")
         return "\n".join(hits[:max_results]) or "no matches"
 
     def list_files(self, subdir: str = ".") -> list[str]:
