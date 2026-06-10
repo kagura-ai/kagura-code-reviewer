@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kagura-code-reviewer"
-version = "0.1.2"
+version = "0.2.0"
 description = "Cost-free Ollama-powered code-review agent for Claude Code"
 readme = "README.md"
 requires-python = ">=3.11"
