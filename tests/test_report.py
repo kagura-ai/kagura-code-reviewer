@@ -4,7 +4,24 @@ from kagura_code_reviewer.report import Finding, Report, Severity, parse_severit
 def test_parse_severity_case_insensitive():
     assert parse_severity("HIGH") is Severity.HIGH
     assert parse_severity("low") is Severity.LOW
-    assert parse_severity("unknown") is Severity.INFO
+
+
+def test_parse_severity_unknown_falls_back_to_medium():
+    # An unrecognised value must NOT demote to the least-severe level: a model
+    # typo like "HIGHT" would otherwise flip a blocking finding to INFO and
+    # silently turn a red verdict green. Fall back to a visible, non-blocking
+    # level instead.
+    assert parse_severity("unknown") is Severity.MEDIUM
+    assert parse_severity("HIGHT") is Severity.MEDIUM
+    assert parse_severity(None) is Severity.MEDIUM  # type: ignore[arg-type]
+
+
+def test_parse_severity_unknown_logs_warning(caplog):
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        parse_severity("HIGHT")
+    assert any("HIGHT" in r.getMessage() for r in caplog.records)
 
 
 def test_exit_code_zero_when_no_blocking():
