@@ -303,3 +303,26 @@ def test_cli_concurrency_and_min_confidence_threaded(repo: Path, monkeypatch):
                                               "--concurrency", "4", "--min-confidence", "0.7"])
     assert result.exit_code == 0
     assert captured["concurrency"] == 4 and captured["min_confidence"] == 0.7
+
+
+def test_cli_version_flag_prints_version_and_exits_zero():
+    from kagura_code_reviewer import __version__
+
+    result = CliRunner().invoke(cli_mod.app, ["--version"])
+    assert result.exit_code == 0
+    # Pin the full "<prog> <version>" line: the _version_callback(prog) factory's
+    # whole job is the per-CLI program-name prefix, so assert it, not a substring.
+    assert result.output.strip() == f"kagura-code-reviewer {__version__}"
+
+
+def test_cli_version_flag_is_eager():
+    from kagura_code_reviewer import __version__
+
+    # --version short-circuits before any review work: a bad base ref must NOT be
+    # reached (eager callback runs first), so it exits 0 AND prints the version
+    # rather than failing on the ref. Asserting the output proves the short-circuit.
+    result = CliRunner().invoke(
+        cli_mod.app, ["--base", "nonexistent-ref-xyz", "--version"]
+    )
+    assert result.exit_code == 0
+    assert result.output.strip() == f"kagura-code-reviewer {__version__}"

@@ -264,3 +264,14 @@ def test_eval_cli_check_baseline_model_mismatch_exits_1(tmp_path, monkeypatch):
     ])
     assert res.exit_code == 1
     assert "FAIL" in res.output
+
+
+def test_eval_cli_version_flag_prints_version_and_exits_zero():
+    from typer.testing import CliRunner
+
+    from kagura_code_reviewer import __version__, eval_cli
+
+    result = CliRunner().invoke(eval_cli.app, ["--version"])
+    assert result.exit_code == 0
+    # Pin the per-CLI program-name prefix ("kagura-eval", not "kagura-code-reviewer").
+    assert result.output.strip() == f"kagura-eval {__version__}"

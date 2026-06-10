@@ -9,6 +9,7 @@ import httpx
 import openai
 import typer
 
+from . import __version__
 from . import config as _config
 from .advisor import detect_hardware, list_models, lookup_cap, recommend
 from .config import _USER, load_config, resolve_model, spec_from_model_name
@@ -111,8 +112,27 @@ def build_review_client(provider: str, model: str | None, local: bool, cloud: bo
                               api_key=api_key, timeout=timeout, seed=seed), chosen
 
 
+def _version_callback(prog: str):
+    """Build an eager Typer callback that prints ``<prog> <version>`` and exits.
+
+    Shared by both the ``kagura-code-reviewer`` and ``kagura-eval`` CLIs so the
+    version string is sourced from ``__version__`` in exactly one place (kept in
+    lock-step by the ``version-sync`` CI job)."""
+
+    def _cb(value: bool) -> None:
+        if value:
+            typer.echo(f"{prog} {__version__}")
+            raise typer.Exit()
+
+    return _cb
+
+
 @app.command()
 def main(
+    version: bool = typer.Option(
+        None, "--version", callback=_version_callback("kagura-code-reviewer"),
+        is_eager=True, help="Show the version and exit.",
+    ),
     base: str = typer.Option("main", help="Base ref to diff against."),
     head: str = typer.Option("HEAD", help="Head ref."),
     repo: Path = typer.Option(Path("."), help="Repository root."),
