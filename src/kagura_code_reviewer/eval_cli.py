@@ -17,7 +17,7 @@ from pathlib import Path
 
 import typer
 
-from .cli import Effort, OutputFormat, Provider
+from .cli import Effort, OutputFormat, Provider, _version_callback
 from .eval_baseline import build_baseline, check_regression, load_baseline
 from .eval_harness import (
     DEFAULT_BUCKET,
@@ -104,6 +104,10 @@ def run_eval(cases, client, *, tier=None, repeats: int = 1, bucket: int = DEFAUL
 
 @app.command()
 def main(
+    version: bool = typer.Option(
+        None, "--version", callback=_version_callback("kagura-eval"),
+        is_eager=True, help="Show the version and exit.",
+    ),
     golden_dir: Path = typer.Option(Path("evals/golden"), "--golden-dir",
                                     help="Directory containing manifest.toml + diffs."),
     effort: Effort = typer.Option(Effort.med, "--effort", help="Review effort tier."),
