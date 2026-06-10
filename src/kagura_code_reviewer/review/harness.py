@@ -143,12 +143,13 @@ def _symptom(f) -> str | None:
 
 def _merge_cluster(cluster: list) -> object:
     rep = max(cluster, key=lambda f: f.severity)
-    rep.merge_count = len(cluster)
     angles: set = set()
     for f in cluster:
         angles |= set(f.angles)
-    rep.angles = sorted(angles)
-    return rep
+    # Return a copy: rep is the actual Finding a finder produced, and callers
+    # (and tests) may still hold a reference. Mutating it in place would
+    # clobber the per-finder angles/merge_count (issue #14).
+    return replace(rep, merge_count=len(cluster), angles=sorted(angles))
 
 
 def dedup(findings: list, bucket: int = 5) -> list:
