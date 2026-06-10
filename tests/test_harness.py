@@ -252,6 +252,24 @@ def test_dedup_same_symptom_far_lines_not_merged():
     assert len(dedup(items, bucket=5)) == 2
 
 
+def test_dedup_does_not_mutate_input_findings():
+    # The representative finding is shared with the caller; merging must not
+    # mutate its per-finder angles/merge_count in place (issue #14).
+    from kagura_code_reviewer.review.harness import dedup
+    rep = _F("a.py", 10, "Off by one error", Severity.HIGH, "linescan")
+    other = _F("a.py", 12, "off-by-one error!", Severity.MEDIUM, "cross-file")
+    items = [rep, other]
+    out = dedup(items, bucket=5)
+    # The merged result carries the cluster union...
+    merged = next(f for f in out if f.file == "a.py")
+    assert merged.merge_count == 2
+    assert set(merged.angles) == {"linescan", "cross-file"}
+    # ...but the original input findings are untouched.
+    assert rep.merge_count == 1
+    assert rep.angles == ["linescan"]
+    assert merged is not rep
+
+
 # ---- verifier ------------------------------------------------------------
 
 def test_verify_keeps_when_confirmed_plausible_ge_refuted():
