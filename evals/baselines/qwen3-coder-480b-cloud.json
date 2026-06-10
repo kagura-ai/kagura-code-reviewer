@@ -1,0 +1,54 @@
+{
+  "baseline_schema_version": 1,
+  "provenance": {
+    "model": "qwen3-coder:480b-cloud",
+    "effort": "med",
+    "seed": 7,
+    "repeats": 5,
+    "captured_at": "2026-06-10T06:11:09Z",
+    "host": "dev"
+  },
+  "guard": {
+    "k_stdev": 2.0,
+    "abs_floor": 0.0
+  },
+  "summary": {
+    "repeats": 5,
+    "precision_mean": 0.6266233766233766,
+    "precision_stdev": 0.13805384172382662,
+    "recall_mean": 0.75,
+    "recall_stdev": 0.08838834764831845
+  },
+  "by_dimension": {
+    "cross-file": {
+      "precision": null,
+      "recall": null
+    },
+    "correctness-linescan": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "removed-behavior": {
+      "precision": null,
+      "recall": null
+    },
+    "correctness": {
+      "precision": 0.8333333333333334,
+      "recall": 0.75
+    },
+    "simplification": {
+      "precision": 0.0,
+      "recall": null
+    }
+  },
+  "by_severity": {
+    "HIGH": {
+      "precision": 0.5,
+      "recall": 0.75
+    },
+    "MEDIUM": {
+      "precision": 0.5,
+      "recall": 0.75
+    }
+  }
+}
