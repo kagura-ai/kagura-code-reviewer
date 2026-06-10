@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from enum import IntEnum
+
+logger = logging.getLogger(__name__)
 
 
 class Severity(IntEnum):
@@ -23,7 +26,12 @@ def parse_severity(value: str) -> Severity:
     try:
         return Severity[value.strip().upper()]
     except (KeyError, AttributeError):
-        return Severity.INFO
+        # Never demote an unrecognised severity to the least-severe level: a
+        # model typo (e.g. "HIGHT") would silently flip a blocking finding to
+        # INFO and turn a red verdict green. Fall back to a visible,
+        # non-blocking level and log so the malformed value is observable.
+        logger.warning("unrecognised severity %r; defaulting to MEDIUM", value)
+        return Severity.MEDIUM
 
 
 def confidence_from_votes(votes: dict) -> float | None:
