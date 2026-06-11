@@ -102,13 +102,14 @@ class TestEncodingPinnedToUtf8:
         self, repo: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         # We assert the *encoding* of the context read and the report write, not
-        # that the review harness runs. Stub client_factory (so
-        # build_review_client makes no network call) and review_harness (so the
-        # command deterministically reaches out.write_text on every platform —
-        # driving the real harness with a FakeClient exits early under some
-        # CPU/concurrency configurations and never reaches the write).
+        # model resolution or the harness. Stub build_review_client (so no local
+        # Ollama model / user config is required — absent on CI) and review_harness
+        # (so the command deterministically reaches out.write_text on every
+        # platform). Driving the real path makes the test depend on machine state:
+        # _resolve_spec raises "no suitable local model installed" on CI, and the
+        # real harness exits early under some CPU/concurrency configs.
         monkeypatch.setattr(
-            cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient()
+            cli_mod, "build_review_client", lambda *a, **k: (FakeClient(), "fake-model")
         )
 
         class _FakeReport:
