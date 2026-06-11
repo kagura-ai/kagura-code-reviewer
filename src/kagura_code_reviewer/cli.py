@@ -177,7 +177,11 @@ def main(
         typer.echo("No changes to review.")
         raise typer.Exit(code=0)
 
-    context = context_file.read_text() if context_file and context_file.is_file() else None
+    context = (
+        context_file.read_text(encoding="utf-8")
+        if context_file and context_file.is_file()
+        else None
+    )
     client, model_label = build_review_client(provider.value, model, local, cloud,
                                               timeout, seed=seed, auto=auto)
 
@@ -200,7 +204,7 @@ def main(
     rendered = report.to_json() if fmt is OutputFormat.json else report.to_markdown()
 
     if out:
-        out.write_text(rendered)
+        out.write_text(rendered, encoding="utf-8")
     else:
         typer.echo(rendered)
     raise typer.Exit(code=report.exit_code())

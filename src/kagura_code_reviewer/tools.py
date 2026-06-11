@@ -50,7 +50,7 @@ class RepoTools:
             return f"error: refusing to read sensitive file: {path}"
         if not target.is_file():
             return f"error: not a file: {path}"
-        data = target.read_text(errors="replace")
+        data = target.read_text(encoding="utf-8", errors="replace")
         if len(data) > max_bytes:
             return data[:max_bytes] + "\n...[truncated]"
         return data
@@ -64,7 +64,7 @@ class RepoTools:
             except ValueError:
                 continue
             try:
-                for i, line in enumerate(target.read_text(errors="replace").splitlines(), 1):
+                for i, line in enumerate(target.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
                     if rx.search(line):
                         hits.append(f"{rel}:{i}: {line.strip()}")
                         if len(hits) >= max_results:
