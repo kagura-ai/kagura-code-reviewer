@@ -101,20 +101,40 @@ class TestEncodingPinnedToUtf8:
     def test_cli_context_read_and_report_write_pin_utf8(
         self, repo: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
+        # We assert the *encoding* of the context read and the report write, not
+        # that the review harness runs. Stub client_factory (so
+        # build_review_client makes no network call) and review_harness (so the
+        # command deterministically reaches out.write_text on every platform —
+        # driving the real harness with a FakeClient exits early under some
+        # CPU/concurrency configurations and never reaches the write).
         monkeypatch.setattr(
             cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient()
         )
+
+        class _FakeReport:
+            def to_markdown(self) -> str:
+                return "# レビュー結果 🎉\n"
+
+            def to_json(self) -> str:
+                return '{"findings": []}'
+
+            def exit_code(self) -> int:
+                return 0
+
+        monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: _FakeReport())
+
         ctx = tmp_path / "context.md"
         ctx.write_text("# 文脈 🎉\n", encoding="utf-8")
         out = tmp_path / "report.md"
         seen: dict[str, list] = {}
         _spy_text_opens(monkeypatch, seen)
         runner = CliRunner()
-        runner.invoke(
+        result = runner.invoke(
             cli_mod.app,
             ["--base", "HEAD~1", "--repo", str(repo),
              "--context-file", str(ctx), "--format", "md", "--out", str(out)],
         )
+        assert result.exit_code == 0, result.output
         ctx_encs = seen.get(str(ctx))
         assert ctx_encs, "expected the context file to be opened as text"
         assert all(e == "utf-8" for e in ctx_encs), f"context read unencoded: {ctx_encs}"
