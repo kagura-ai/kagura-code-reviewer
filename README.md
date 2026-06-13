@@ -84,8 +84,9 @@ immutable head ref (`refs/pull/<N>/head`) into an isolated git worktree, reviews
 like a local diff, and cleans up afterward (pass `--keep` to retain the worktree for
 debugging). It works for **open and closed/merged** PRs — even when the source branch
 was deleted — and for fork PRs. Requirements: run it **inside a local clone of the
-PR's repository** (the ref is fetched from its `origin`), and have `gh` installed and
-authenticated (used for PR metadata and private-repo auth). `--pr` cannot be combined
+PR's repository** (the ref is fetched from its `origin` — use `--pr-remote <name>` if
+your canonical remote is named differently, e.g. `upstream`), and have `gh` installed
+and authenticated (used for PR metadata and private-repo auth). `--pr` cannot be combined
 with `--base`/`--head`/`--repo`; it does compose with `--cloud`, `--provider`, etc.
 (Reviewing an arbitrary PR from an unrelated checkout is a planned follow-up.)
 

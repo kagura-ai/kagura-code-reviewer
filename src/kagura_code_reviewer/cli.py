@@ -138,6 +138,7 @@ def main(
     head: str = typer.Option("HEAD", help="Head ref."),
     repo: Path = typer.Option(Path("."), help="Repository root."),
     pr: str = typer.Option(None, "--pr", help="Review a GitHub PR by URL (open or closed). Run inside a clone of the PR's repo."),
+    pr_remote: str = typer.Option("origin", "--pr-remote", help="Remote to fetch the PR ref from (use with --pr; e.g. 'upstream')."),
     keep: bool = typer.Option(False, "--keep", help="Keep the temporary --pr worktree for debugging."),
     paths: list[str] = typer.Option(None, help="Limit diff to these paths."),
     context_file: Path = typer.Option(None, help="Memory context file to inject."),
@@ -180,7 +181,7 @@ def main(
             typer.echo("--pr cannot be combined with --base/--head/--repo", err=True)
             raise typer.Exit(code=2)
         try:
-            src = resolve_pr(pr, keep=keep)
+            src = resolve_pr(pr, keep=keep, remote=pr_remote)
         except Exception as exc:
             typer.echo(f"failed to resolve PR '{pr}': {exc}", err=True)
             raise typer.Exit(code=2)

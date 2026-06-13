@@ -135,6 +135,41 @@ def test_remote_github_repo_none_for_nongithub_remote(tmp_path: Path):
     assert pr_source._remote_github_repo(repo, "origin") is None
 
 
+def test_remote_github_repo_rejects_lookalike_host(tmp_path: Path):
+    """A host that merely contains 'github.com' as a substring is NOT GitHub."""
+    repo = tmp_path / "r"
+    _git(tmp_path, "init", str(repo))
+    _git(repo, "remote", "add", "origin", "https://mygithub.com/o/r.git")
+    assert pr_source._remote_github_repo(repo, "origin") is None
+
+
+def test_remote_github_repo_rejects_github_as_path_segment(tmp_path: Path):
+    """'github.com' appearing as a path segment of another host is NOT GitHub."""
+    repo = tmp_path / "r"
+    _git(tmp_path, "init", str(repo))
+    _git(repo, "remote", "add", "origin", "https://evil.example.com/github.com/a/b.git")
+    assert pr_source._remote_github_repo(repo, "origin") is None
+
+
+def test_resolve_pr_honors_custom_remote(tmp_path: Path, monkeypatch):
+    """resolve_pr fetches from the given remote, not a hardcoded 'origin'."""
+    clone = tmp_path / "clone"
+    _git(tmp_path, "init", str(clone))
+    _git(clone, "remote", "add", "upstream", "https://github.com/o/r.git")
+    monkeypatch.setattr(pr_source, "pr_metadata", lambda url: {"baseRefName": "main"})
+    captured = {}
+
+    def fake_git(repo_root, *args):
+        captured.setdefault("fetch", args) if args and args[0] == "fetch" else None
+        # don't actually fetch/worktree — fail fast after recording the remote
+        raise RuntimeError("stop after recording")
+    monkeypatch.setattr(pr_source, "_git", fake_git)
+    with pytest.raises(Exception):
+        pr_source.resolve_pr("https://github.com/o/r/pull/1",
+                             repo_root=clone, remote="upstream")
+    assert captured["fetch"][1] == "upstream"  # ("fetch", "upstream", <refspec>, ...)
+
+
 def test_resolve_pr_rejects_repo_mismatch(tmp_path: Path, monkeypatch):
     """A PR URL whose repo differs from the local origin is refused, before any
     fetch reviews the wrong repo's PR #N."""

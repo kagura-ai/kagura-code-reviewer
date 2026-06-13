@@ -324,7 +324,7 @@ def test_cli_pr_invokes_resolver_and_cleans_up(repo: Path, monkeypatch):
 
     cleaned = {"v": False}
 
-    def fake_resolve(url, *, keep=False):
+    def fake_resolve(url, *, keep=False, remote="origin"):
         return DiffSource(
             repo_root=repo, base="HEAD~1", head="HEAD",
             cleanup=lambda: cleaned.__setitem__("v", True),
@@ -346,7 +346,7 @@ def test_cli_pr_cleans_up_on_harness_error(repo: Path, monkeypatch):
     cleaned = {"v": False}
     monkeypatch.setattr(
         cli_mod, "resolve_pr",
-        lambda url, *, keep=False: DiffSource(
+        lambda url, *, keep=False, remote="origin": DiffSource(
             repo_root=repo, base="HEAD~1", head="HEAD",
             cleanup=lambda: cleaned.__setitem__("v", True)),
     )
@@ -369,7 +369,7 @@ def test_cli_pr_cleans_up_on_git_diff_error(repo: Path, monkeypatch):
     cleaned = {"v": False}
     monkeypatch.setattr(
         cli_mod, "resolve_pr",
-        lambda url, *, keep=False: DiffSource(
+        lambda url, *, keep=False, remote="origin": DiffSource(
             repo_root=repo, base="NO_SUCH_BASE", head="NO_SUCH_HEAD",
             cleanup=lambda: cleaned.__setitem__("v", True)),
     )
@@ -386,7 +386,7 @@ def test_cli_pr_cleans_up_on_empty_diff(repo: Path, monkeypatch):
     cleaned = {"v": False}
     monkeypatch.setattr(
         cli_mod, "resolve_pr",
-        lambda url, *, keep=False: DiffSource(
+        lambda url, *, keep=False, remote="origin": DiffSource(
             repo_root=repo, base="HEAD", head="HEAD",
             cleanup=lambda: cleaned.__setitem__("v", True)),
     )
@@ -394,6 +394,23 @@ def test_cli_pr_cleans_up_on_empty_diff(repo: Path, monkeypatch):
     assert result.exit_code == 0
     assert "No changes to review" in result.output
     assert cleaned["v"] is True
+
+
+def test_cli_pr_remote_threaded_to_resolver(repo: Path, monkeypatch):
+    """--pr-remote overrides the hardcoded 'origin' passed to resolve_pr."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    captured = {}
+
+    def fake_resolve(url, *, keep=False, remote="origin"):
+        captured["remote"] = remote
+        return DiffSource(repo_root=repo, base="HEAD", head="HEAD", cleanup=lambda: None)
+    monkeypatch.setattr(cli_mod, "resolve_pr", fake_resolve)
+
+    result = CliRunner().invoke(
+        cli_mod.app, ["--pr", "https://github.com/o/r/pull/1", "--pr-remote", "upstream"])
+    assert result.exit_code == 0          # empty diff (HEAD...HEAD) → exit 0
+    assert captured["remote"] == "upstream"
 
 
 def test_cli_version_flag_prints_version_and_exits_zero():

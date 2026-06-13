@@ -44,9 +44,13 @@ _log = logging.getLogger(__name__)
 _PR_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)/pull/(?P<number>\d+)/?$"
 )
-# Matches both https://github.com/owner/repo(.git) and git@github.com:owner/repo(.git).
+# Matches https://github.com/owner/repo(.git), git@github.com:owner/repo(.git),
+# ssh://git@github.com/owner/repo. Anchored at the host so a look-alike host
+# (mygithub.com) or github.com appearing as a path segment of another host does
+# NOT match — otherwise the origin↔URL guard could compare the wrong owner/repo.
 _GH_REMOTE_RE = re.compile(
-    r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?/?$"
+    r"^(?:(?:https?|git|ssh)://)?(?:[^@/]+@)?github\.com[:/]"
+    r"(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?/?$"
 )
 
 
@@ -73,17 +77,21 @@ def parse_pr_url(url: str) -> tuple[str, str, int]:
     return m["owner"], m["repo"], int(m["number"])
 
 
+def _run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
+    """Run a captured, text subprocess. The single place the call shape lives so
+    error handling stays consistent across pr_metadata / _git / remote probing /
+    teardown."""
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+
 def pr_metadata(url: str) -> dict:
     """Resolve PR metadata via ``gh pr view`` (the only network/auth boundary).
 
     On failure, raise ``RuntimeError`` carrying gh's stderr so the operator can see
     *why* (auth, not-found, wrong repo) instead of an opaque exit status.
     """
-    proc = subprocess.run(
-        ["gh", "pr", "view", url, "--json",
-         "number,state,baseRefName,headRefOid,headRepository"],
-        capture_output=True, text=True,
-    )
+    proc = _run(["gh", "pr", "view", url, "--json",
+                 "number,state,baseRefName,headRefOid,headRepository"])
     if proc.returncode != 0:
         raise RuntimeError(
             f"gh pr view failed for {url}: {proc.stderr.strip() or proc.stdout.strip()}"
@@ -97,9 +105,7 @@ def pr_metadata(url: str) -> dict:
 def _git(repo_root: Path, *args: str) -> str:
     """Run git, raising RuntimeError (with stderr) on failure instead of an opaque
     CalledProcessError whose message hides the cause."""
-    proc = subprocess.run(
-        ["git", *args], cwd=repo_root, capture_output=True, text=True,
-    )
+    proc = _run(["git", *args], repo_root)
     if proc.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
     return proc.stdout
@@ -107,10 +113,7 @@ def _git(repo_root: Path, *args: str) -> str:
 
 def _remote_github_repo(repo_root: Path, remote: str) -> tuple[str, str] | None:
     """Return (owner, repo) for ``remote`` if it is a GitHub URL, else None."""
-    proc = subprocess.run(
-        ["git", "remote", "get-url", remote],
-        cwd=repo_root, capture_output=True, text=True,
-    )
+    proc = _run(["git", "remote", "get-url", remote], repo_root)
     if proc.returncode != 0:
         return None
     m = _GH_REMOTE_RE.search(proc.stdout.strip())
@@ -125,15 +128,11 @@ def _teardown(repo_root: Path, local_ref: str, worktree: Path | None,
     state does not vanish silently.
     """
     if worktree is not None:
-        proc = subprocess.run(
-            ["git", "worktree", "remove", "--force", str(worktree)],
-            cwd=repo_root, capture_output=True, text=True,
-        )
+        proc = _run(["git", "worktree", "remove", "--force", str(worktree)], repo_root)
         if proc.returncode != 0:
             _log.warning("failed to remove --pr worktree %s: %s",
                          worktree, proc.stderr.strip())
-    subprocess.run(["git", "update-ref", "-d", local_ref],
-                   cwd=repo_root, capture_output=True, text=True)
+    _run(["git", "update-ref", "-d", local_ref], repo_root)
     if parent is not None:
         shutil.rmtree(parent, ignore_errors=True)
 
