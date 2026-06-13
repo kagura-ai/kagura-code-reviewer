@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
+import sys
 from enum import Enum
 from pathlib import Path
 
@@ -128,6 +130,25 @@ def _version_callback(prog: str):
     return _cb
 
 
+def _setup_verbose_logging() -> None:
+    """Attach a stderr INFO handler to the package logger for `--verbose`/`-v`.
+
+    Progress goes to **stderr only** so stdout / `--out` (the md/json report) stays
+    clean and pipe-safe. Scoped to the `kagura_code_reviewer` logger with
+    ``propagate=False`` so the root logger is never clobbered, and idempotent so a
+    second call (or repeated test invocations) does not double-attach.
+    """
+    logger = logging.getLogger("kagura_code_reviewer")
+    if any(getattr(h, "_kcr_verbose", False) for h in logger.handlers):
+        return
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    setattr(handler, "_kcr_verbose", True)  # marker so re-invocation stays idempotent
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+
 @app.command()
 def main(
     version: bool = typer.Option(
@@ -155,8 +176,11 @@ def main(
     concurrency: int = typer.Option(1, "--concurrency", help="Parallel finder/verify calls (useful for cloud)."),
     min_confidence: float = typer.Option(0.0, "--min-confidence", help="Drop findings below this confidence (0-1)."),
     auto: bool = typer.Option(False, "--auto", help="Persist the advisor's model pick to user config."),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Stream review progress to stderr."),
     doctor: bool = typer.Option(False, "--doctor", help="Check ollama daemon and model availability, then exit."),
 ) -> None:
+    if verbose:
+        _setup_verbose_logging()
     if doctor:
         from . import doctor as _doctor
         base_url = _local_base_url()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
@@ -11,6 +12,11 @@ from ..agent import run_agent
 from ..report import Finding, Report, Severity, confidence_from_votes
 from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
 from .skill import _build_tools, build_messages, build_verifier_tools, fence, make_nonce
+
+# Progress is emitted at INFO on this module logger. By default no handler is
+# attached so it is silent (and stdout/--out stays the report); `--verbose`/`-v`
+# attaches a stderr handler in cli._setup_verbose_logging (issue #25).
+_log = logging.getLogger(__name__)
 
 _ALL_ANGLES = [
     "correctness-linescan", "removed-behavior", "cross-file",
@@ -259,20 +265,26 @@ def review_harness(finder_client, verifier_client, repo, diff, context, tier,
     # verifier wraps the untrusted diff/memory with the same unforgeable markers
     # (issue #12), so attacker-controlled content cannot break out of the fence.
     nonce = make_nonce()
+    _log.info("review: effort=%s, %d finder angle(s)", tier.name, len(tier.angles) * tier.repeats)
     candidates, errors = run_finders(
         finder_client, repo, diff, context, tier, max_iters, max_concurrency, nonce)
+    _log.info("finders: %d candidate(s), %d error(s)", len(candidates), len(errors))
     deduped = dedup(candidates)
+    _log.info("deduped: %d candidate(s) to verify", len(deduped))
 
     survivors = []
-    for cand in deduped:
+    total = len(deduped)
+    for i, cand in enumerate(deduped, 1):
         keep, tally = verify_candidate(
             verifier_client, repo, diff, cand, _verify_votes_for(cand, tier), max_iters, nonce)
+        _log.info("verify %d/%d: %s → %s", i, total, cand.title, "kept" if keep else "dropped")
         if keep:
             cand.votes = tally
             cand.confidence = confidence_from_votes(tally)
             survivors.append(cand)
 
     findings = aggregate(survivors, tier.max_findings, min_confidence)
+    _log.info("final: %d finding(s)", len(findings))
 
     if not findings and errors:
         counts: dict[str, int] = {}

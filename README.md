@@ -77,7 +77,15 @@ kagura-code-reviewer --base main --paths src/foo.py --paths tests/test_foo.py
 
 # Review a GitHub PR by URL (open or closed/merged) — run inside a clone of the PR's repo
 kagura-code-reviewer --pr https://github.com/owner/repo/pull/123
+
+# Stream review progress to stderr (so a slow local run doesn't look frozen)
+kagura-code-reviewer --base main -v
 ```
+
+**Progress (`-v`/`--verbose`):** streams phase progress (finders → dedup →
+per-candidate verify `i/N` → final count) to **stderr** so a slow local-model run
+doesn't look frozen. stdout / `--out` (the md/json report) stays clean and
+pipe-safe, so `--format json --out` is unaffected.
 
 **Reviewing a GitHub PR (`--pr`):** pass a PR URL and the tool fetches the PR's
 immutable head ref (`refs/pull/<N>/head`) into an isolated git worktree, reviews it

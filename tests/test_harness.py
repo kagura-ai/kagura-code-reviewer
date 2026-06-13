@@ -505,3 +505,30 @@ def test_review_harness_sets_confidence_from_votes():
     report = review_harness(Client(), Client(), StubRepo(), diff="d", context=None,
                             tier=tier, max_iters=4, max_concurrency=1)
     assert report.findings[0].confidence == 1.0  # 2x CONFIRMED
+
+
+# ---- verbose progress logging (issue #25) --------------------------------
+
+def test_review_harness_emits_phase_progress_logs(caplog):
+    """With INFO logging enabled, the harness narrates finders → dedup → verify
+    → aggregate so a slow local run does not look frozen (issue #25)."""
+    import logging
+    from kagura_code_reviewer.review.harness import review_harness
+    tier = EffortTier("t", ["correctness-linescan"], repeats=1,
+                      verify_votes=1, verify_votes_correctness=1, max_findings=10)
+
+    class Client:
+        def chat(self, messages, tools=None):
+            tool_names = {t["function"]["name"] for t in (tools or [])}
+            if "submit_findings" in tool_names:
+                return _submit([_finding("a.py", 1, "real bug", "high")])
+            return _verdict("CONFIRMED")
+
+    with caplog.at_level(logging.INFO, logger="kagura_code_reviewer.review.harness"):
+        review_harness(Client(), Client(), StubRepo(), diff="d", context=None,
+                       tier=tier, max_iters=4, max_concurrency=1)
+
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "finders" in text          # candidate/error counts
+    assert "verify 1/1" in text       # per-candidate i/N
+    assert "final" in text            # final findings count
