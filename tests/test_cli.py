@@ -424,6 +424,57 @@ def test_cli_pr_remote_threaded_to_resolver(repo: Path, monkeypatch):
     assert captured["remote"] == "upstream"
 
 
+def test_setup_verbose_logging_configures_stderr_handler():
+    """-v wiring: a single stderr INFO handler on the package logger, propagate
+    off so the root logger is not clobbered, and idempotent (no duplicate)."""
+    import logging
+    import sys
+    logger = logging.getLogger("kagura_code_reviewer")
+    # Snapshot + restore: _setup_verbose_logging mutates a process-global logger
+    # (propagate=False), which would otherwise break caplog in sibling tests.
+    saved_handlers, saved_level, saved_propagate = (
+        list(logger.handlers), logger.level, logger.propagate)
+    for h in list(logger.handlers):
+        logger.removeHandler(h)
+    try:
+        cli_mod._setup_verbose_logging()
+        cli_mod._setup_verbose_logging()  # idempotent — must not double-attach
+        handlers = [h for h in logger.handlers if isinstance(h, logging.StreamHandler)]
+        assert len(handlers) == 1
+        assert handlers[0].stream is sys.stderr   # stderr, never stdout
+        assert logger.level == logging.INFO
+        assert logger.propagate is False
+    finally:
+        for h in list(logger.handlers):
+            logger.removeHandler(h)
+        for h in saved_handlers:
+            logger.addHandler(h)
+        logger.setLevel(saved_level)
+        logger.propagate = saved_propagate
+
+
+def test_cli_verbose_flag_invokes_setup(repo: Path, monkeypatch):
+    called = {"v": False}
+    monkeypatch.setattr(cli_mod, "_setup_verbose_logging", lambda: called.__setitem__("v", True))
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(cli_mod, "build_review_client", lambda *a, **k: (object(), "m"))
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo), "-v"])
+    assert result.exit_code == 0
+    assert called["v"] is True
+
+
+def test_cli_default_does_not_invoke_verbose_setup(repo: Path, monkeypatch):
+    called = {"v": False}
+    monkeypatch.setattr(cli_mod, "_setup_verbose_logging", lambda: called.__setitem__("v", True))
+    monkeypatch.setattr(cli_mod.RepoTools, "git_diff", lambda self, b, h, p=None: "DIFF")
+    monkeypatch.setattr(cli_mod, "build_review_client", lambda *a, **k: (object(), "m"))
+    monkeypatch.setattr(cli_mod, "review_harness", lambda *a, **k: Report(findings=[]), raising=False)
+    result = CliRunner().invoke(cli_mod.app, ["--base", "HEAD~1", "--repo", str(repo)])
+    assert result.exit_code == 0
+    assert called["v"] is False
+
+
 def test_cli_version_flag_prints_version_and_exits_zero():
     from kagura_code_reviewer import __version__
 
