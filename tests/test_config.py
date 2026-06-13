@@ -49,6 +49,9 @@ def test_shipped_config_has_providers():
     assert set(cfg["providers"]) >= {"ollama", "openai", "anthropic", "gemini"}
     assert cfg["providers"]["anthropic"]["kind"] == "anthropic"
     assert cfg["providers"]["openai"]["api_key_env"] == "OPENAI_API_KEY"
+    # gemini-2.0-flash was retired by Google (404 "no longer available"); the
+    # shipped default must be a current model so --provider gemini works OOTB.
+    assert cfg["providers"]["gemini"]["default_model"] == "gemini-2.5-flash"
 
 
 def test_write_user_model_writes_default_alias(tmp_path, monkeypatch):
