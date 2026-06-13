@@ -305,6 +305,125 @@ def test_cli_concurrency_and_min_confidence_threaded(repo: Path, monkeypatch):
     assert captured["concurrency"] == 4 and captured["min_confidence"] == 0.7
 
 
+def test_cli_pr_conflicts_with_base(repo: Path, monkeypatch):
+    """--pr is mutually exclusive with --base/--head/--repo (gate1/CTO note)."""
+    def boom(*a, **k):
+        raise AssertionError("resolve_pr must not run when flags conflict")
+    monkeypatch.setattr(cli_mod, "resolve_pr", boom)
+    result = CliRunner().invoke(
+        cli_mod.app,
+        ["--pr", "https://github.com/o/r/pull/1", "--base", "HEAD~1"],
+    )
+    assert result.exit_code != 0
+    assert "--pr" in result.output and "cannot be combined" in result.output
+
+
+def test_cli_pr_invokes_resolver_and_cleans_up(repo: Path, monkeypatch):
+    """--pr resolves a DiffSource, reviews its worktree, and always cleans up."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    cleaned = {"v": False}
+
+    def fake_resolve(url, *, keep=False, remote="origin"):
+        return DiffSource(
+            repo_root=repo, base="HEAD~1", head="HEAD",
+            cleanup=lambda: cleaned.__setitem__("v", True),
+        )
+    monkeypatch.setattr(cli_mod, "resolve_pr", fake_resolve)
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: FakeClient())
+
+    result = CliRunner().invoke(
+        cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 1          # FakeClient emits a blocking finding
+    assert "bad" in result.stdout
+    assert cleaned["v"] is True           # cleanup ran even though review exited nonzero
+
+
+def test_cli_pr_cleans_up_on_harness_error(repo: Path, monkeypatch):
+    """cleanup must run even if the review raises (finally path)."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    cleaned = {"v": False}
+    monkeypatch.setattr(
+        cli_mod, "resolve_pr",
+        lambda url, *, keep=False, remote="origin": DiffSource(
+            repo_root=repo, base="HEAD~1", head="HEAD",
+            cleanup=lambda: cleaned.__setitem__("v", True)),
+    )
+    monkeypatch.setattr(cli_mod, "client_factory", lambda spec, timeout, seed=None: object())
+
+    def boom_harness(*a, **k):
+        raise ConnectionError("backend down")
+    monkeypatch.setattr(cli_mod, "review_harness", boom_harness, raising=False)
+
+    result = CliRunner().invoke(
+        cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 3
+    assert cleaned["v"] is True
+
+
+def test_cli_pr_cleans_up_on_git_diff_error(repo: Path, monkeypatch):
+    """--pr with refs that fail git_diff exits 2 AND still runs cleanup (finally)."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    cleaned = {"v": False}
+    monkeypatch.setattr(
+        cli_mod, "resolve_pr",
+        lambda url, *, keep=False, remote="origin": DiffSource(
+            repo_root=repo, base="NO_SUCH_BASE", head="NO_SUCH_HEAD",
+            cleanup=lambda: cleaned.__setitem__("v", True)),
+    )
+    result = CliRunner().invoke(cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 2
+    assert "git diff failed" in result.output
+    assert cleaned["v"] is True
+
+
+def test_cli_pr_cleans_up_on_empty_diff(repo: Path, monkeypatch):
+    """--pr with an empty diff exits 0 AND still runs cleanup (finally)."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    cleaned = {"v": False}
+    monkeypatch.setattr(
+        cli_mod, "resolve_pr",
+        lambda url, *, keep=False, remote="origin": DiffSource(
+            repo_root=repo, base="HEAD", head="HEAD",
+            cleanup=lambda: cleaned.__setitem__("v", True)),
+    )
+    result = CliRunner().invoke(cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 0
+    assert "No changes to review" in result.output
+    assert cleaned["v"] is True
+
+
+def test_cli_pr_resolve_failure_exits_2(repo: Path, monkeypatch):
+    """resolve_pr raising (bad URL, gh auth, repo mismatch) → exit 2 with the cause."""
+    def boom(url, *, keep=False, remote="origin"):
+        raise RuntimeError("gh pr view failed: not authenticated")
+    monkeypatch.setattr(cli_mod, "resolve_pr", boom)
+    result = CliRunner().invoke(cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 2
+    assert "failed to resolve PR" in result.output
+    assert "not authenticated" in result.output
+
+
+def test_cli_pr_remote_threaded_to_resolver(repo: Path, monkeypatch):
+    """--pr-remote overrides the hardcoded 'origin' passed to resolve_pr."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    captured = {}
+
+    def fake_resolve(url, *, keep=False, remote="origin"):
+        captured["remote"] = remote
+        return DiffSource(repo_root=repo, base="HEAD", head="HEAD", cleanup=lambda: None)
+    monkeypatch.setattr(cli_mod, "resolve_pr", fake_resolve)
+
+    result = CliRunner().invoke(
+        cli_mod.app, ["--pr", "https://github.com/o/r/pull/1", "--pr-remote", "upstream"])
+    assert result.exit_code == 0          # empty diff (HEAD...HEAD) → exit 0
+    assert captured["remote"] == "upstream"
+
+
 def test_cli_version_flag_prints_version_and_exits_zero():
     from kagura_code_reviewer import __version__
 

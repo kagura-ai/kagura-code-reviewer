@@ -16,6 +16,7 @@ from .config import _USER, load_config, resolve_model, spec_from_model_name
 from .ollama_client import OllamaClient
 from .providers.anthropic_client import AnthropicClient
 from .providers.openai_compat import OpenAICompatClient
+from .pr_source import resolve_pr
 from .review.harness import resolve_tier, review_harness
 from .tools import RepoTools
 
@@ -136,6 +137,9 @@ def main(
     base: str = typer.Option("main", help="Base ref to diff against."),
     head: str = typer.Option("HEAD", help="Head ref."),
     repo: Path = typer.Option(Path("."), help="Repository root."),
+    pr: str = typer.Option(None, "--pr", help="Review a GitHub PR by URL (open or closed). Run inside a clone of the PR's repo."),
+    pr_remote: str = typer.Option("origin", "--pr-remote", help="Remote to fetch the PR ref from (use with --pr; e.g. 'upstream')."),
+    keep: bool = typer.Option(False, "--keep", help="Keep the temporary --pr worktree for debugging."),
     paths: list[str] = typer.Option(None, help="Limit diff to these paths."),
     context_file: Path = typer.Option(None, help="Memory context file to inject."),
     model: str = typer.Option(None, help="Model alias (see config.toml)."),
@@ -167,44 +171,66 @@ def main(
         typer.echo(_doctor.format_hardware_report(hw, rec))
         raise typer.Exit(code=0 if all(r.ok for r in results) else 1)
 
-    tools = RepoTools(repo)
-    try:
-        diff = tools.git_diff(base, head, paths or None)
-    except subprocess.CalledProcessError as exc:
-        typer.echo(f"git diff failed (check refs '{base}'/'{head}'): {exc}", err=True)
-        raise typer.Exit(code=2)
-    if not diff.strip():
-        typer.echo("No changes to review.")
-        raise typer.Exit(code=0)
-
-    context = (
-        context_file.read_text(encoding="utf-8")
-        if context_file and context_file.is_file()
-        else None
-    )
-    client, model_label = build_review_client(provider.value, model, local, cloud,
-                                              timeout, seed=seed, auto=auto)
-
-    tier = resolve_tier(effort.value, config=load_config())
-    try:
-        report = review_harness(
-            client, client, tools, diff=diff, context=context,
-            tier=tier, max_iters=max_iters,
-            max_concurrency=concurrency, min_confidence=min_confidence,
-        )
-    except (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError) as exc:
-        typer.echo(
-            f"{provider.value} request failed: {exc}\n"
-            f"Is the backend reachable and is model '{model_label}' available? "
-            f"Try: kagura-code-reviewer --doctor",
-            err=True,
-        )
-        raise typer.Exit(code=3)
-
-    rendered = report.to_json() if fmt is OutputFormat.json else report.to_markdown()
-
-    if out:
-        out.write_text(rendered, encoding="utf-8")
+    # A GitHub PR URL is resolved to an isolated worktree (the PR head) and reviewed
+    # exactly like a local diff; the sandbox (RepoTools) is the unchanged trust
+    # boundary. --pr owns the review target, so it cannot be combined with the
+    # local-diff selectors --base/--head/--repo. (--cloud selects the model and
+    # composes fine; --paths still narrows the PR diff.)
+    if pr:
+        if base != "main" or head != "HEAD" or str(repo) != ".":
+            typer.echo("--pr cannot be combined with --base/--head/--repo", err=True)
+            raise typer.Exit(code=2)
+        try:
+            src = resolve_pr(pr, keep=keep, remote=pr_remote)
+        except Exception as exc:
+            typer.echo(f"failed to resolve PR '{pr}': {exc}", err=True)
+            raise typer.Exit(code=2)
+        review_root, diff_base, diff_head, cleanup = (
+            src.repo_root, src.base, src.head, src.cleanup)
     else:
-        typer.echo(rendered)
-    raise typer.Exit(code=report.exit_code())
+        review_root, diff_base, diff_head, cleanup = repo, base, head, lambda: None
+
+    try:
+        tools = RepoTools(review_root)
+        try:
+            diff = tools.git_diff(diff_base, diff_head, paths or None)
+        except subprocess.CalledProcessError as exc:
+            typer.echo(f"git diff failed (check refs '{diff_base}'/'{diff_head}'): {exc}", err=True)
+            raise typer.Exit(code=2)
+        if not diff.strip():
+            typer.echo("No changes to review.")
+            raise typer.Exit(code=0)
+
+        context = (
+            context_file.read_text(encoding="utf-8")
+            if context_file and context_file.is_file()
+            else None
+        )
+        client, model_label = build_review_client(provider.value, model, local, cloud,
+                                                  timeout, seed=seed, auto=auto)
+
+        tier = resolve_tier(effort.value, config=load_config())
+        try:
+            report = review_harness(
+                client, client, tools, diff=diff, context=context,
+                tier=tier, max_iters=max_iters,
+                max_concurrency=concurrency, min_confidence=min_confidence,
+            )
+        except (openai.OpenAIError, httpx.HTTPError, ConnectionError, TimeoutError) as exc:
+            typer.echo(
+                f"{provider.value} request failed: {exc}\n"
+                f"Is the backend reachable and is model '{model_label}' available? "
+                f"Try: kagura-code-reviewer --doctor",
+                err=True,
+            )
+            raise typer.Exit(code=3)
+
+        rendered = report.to_json() if fmt is OutputFormat.json else report.to_markdown()
+
+        if out:
+            out.write_text(rendered, encoding="utf-8")
+        else:
+            typer.echo(rendered)
+        raise typer.Exit(code=report.exit_code())
+    finally:
+        cleanup()
