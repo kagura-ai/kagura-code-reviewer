@@ -396,6 +396,17 @@ def test_cli_pr_cleans_up_on_empty_diff(repo: Path, monkeypatch):
     assert cleaned["v"] is True
 
 
+def test_cli_pr_resolve_failure_exits_2(repo: Path, monkeypatch):
+    """resolve_pr raising (bad URL, gh auth, repo mismatch) → exit 2 with the cause."""
+    def boom(url, *, keep=False, remote="origin"):
+        raise RuntimeError("gh pr view failed: not authenticated")
+    monkeypatch.setattr(cli_mod, "resolve_pr", boom)
+    result = CliRunner().invoke(cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 2
+    assert "failed to resolve PR" in result.output
+    assert "not authenticated" in result.output
+
+
 def test_cli_pr_remote_threaded_to_resolver(repo: Path, monkeypatch):
     """--pr-remote overrides the hardcoded 'origin' passed to resolve_pr."""
     from kagura_code_reviewer.pr_source import DiffSource

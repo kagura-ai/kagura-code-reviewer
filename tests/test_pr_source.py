@@ -196,6 +196,23 @@ def test_resolve_pr_cleans_up_on_partial_failure(remote_clone: Path, monkeypatch
 
 # --- #3: actionable diagnostics ----------------------------------------------
 
+def test_pr_metadata_returns_parsed_json(monkeypatch):
+    class _P:
+        returncode = 0
+        stdout = '{"number": 1, "state": "OPEN", "baseRefName": "main"}'
+        stderr = ""
+    monkeypatch.setattr(pr_source.subprocess, "run", lambda *a, **k: _P())
+    data = pr_source.pr_metadata("https://github.com/o/r/pull/1")
+    assert data["baseRefName"] == "main"
+
+
+def test_remote_github_repo_none_when_remote_absent(tmp_path: Path):
+    """No 'origin' configured → git remote get-url fails → None (guard skipped)."""
+    repo = tmp_path / "r"
+    _git(tmp_path, "init", str(repo))
+    assert pr_source._remote_github_repo(repo, "origin") is None
+
+
 def test_pr_metadata_surfaces_gh_stderr(monkeypatch):
     class _P:
         returncode = 1
