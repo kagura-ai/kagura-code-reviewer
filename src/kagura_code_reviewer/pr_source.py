@@ -104,7 +104,13 @@ def pr_metadata(url: str) -> dict:
 
 def _git(repo_root: Path, *args: str) -> str:
     """Run git, raising RuntimeError (with stderr) on failure instead of an opaque
-    CalledProcessError whose message hides the cause."""
+    CalledProcessError whose message hides the cause.
+
+    Intentionally NOT shared with ``RepoTools._git`` (tools.py): that one is bound to
+    the sandbox root and uses ``check=True`` (opaque error); this runs against an
+    arbitrary clone root (before the worktree exists) and surfaces git's stderr for
+    diagnosability. Keeping them separate also preserves the "tools.py unchanged"
+    sandbox invariant this feature depends on."""
     proc = _run(["git", *args], repo_root)
     if proc.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
