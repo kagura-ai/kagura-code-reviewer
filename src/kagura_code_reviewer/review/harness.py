@@ -9,14 +9,14 @@ import httpx
 import openai
 
 from ..agent import run_agent
+from ..report import Finding, Report, Severity, confidence_from_votes
+from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
+from .skill import _build_tools, build_messages, build_verifier_tools, fence, make_nonce
 
 # Progress is emitted at INFO on this module logger. By default no handler is
 # attached so it is silent (and stdout/--out stays the report); `--verbose`/`-v`
 # attaches a stderr handler in cli._setup_verbose_logging (issue #25).
 _log = logging.getLogger(__name__)
-from ..report import Finding, Report, Severity, confidence_from_votes
-from .angles import ANGLE_PROMPTS, CORRECTNESS_ANGLES
-from .skill import _build_tools, build_messages, build_verifier_tools, fence, make_nonce
 
 _ALL_ANGLES = [
     "correctness-linescan", "removed-behavior", "cross-file",
