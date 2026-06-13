@@ -74,7 +74,20 @@ kagura-code-reviewer --local
 
 # Limit review to specific paths
 kagura-code-reviewer --base main --paths src/foo.py --paths tests/test_foo.py
+
+# Review a GitHub PR by URL (open or closed/merged) — run inside a clone of the PR's repo
+kagura-code-reviewer --pr https://github.com/owner/repo/pull/123
 ```
+
+**Reviewing a GitHub PR (`--pr`):** pass a PR URL and the tool fetches the PR's
+immutable head ref (`refs/pull/<N>/head`) into an isolated git worktree, reviews it
+like a local diff, and cleans up afterward (pass `--keep` to retain the worktree for
+debugging). It works for **open and closed/merged** PRs — even when the source branch
+was deleted — and for fork PRs. Requirements: run it **inside a local clone of the
+PR's repository** (the ref is fetched from its `origin`), and have `gh` installed and
+authenticated (used for PR metadata and private-repo auth). `--pr` cannot be combined
+with `--base`/`--head`/`--repo`; it does compose with `--cloud`, `--provider`, etc.
+(Reviewing an arbitrary PR from an unrelated checkout is a planned follow-up.)
 
 **Exit codes:**
 - `0` — no blocking issues (severities INFO / LOW / MEDIUM only)
