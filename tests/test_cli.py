@@ -362,6 +362,40 @@ def test_cli_pr_cleans_up_on_harness_error(repo: Path, monkeypatch):
     assert cleaned["v"] is True
 
 
+def test_cli_pr_cleans_up_on_git_diff_error(repo: Path, monkeypatch):
+    """--pr with refs that fail git_diff exits 2 AND still runs cleanup (finally)."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    cleaned = {"v": False}
+    monkeypatch.setattr(
+        cli_mod, "resolve_pr",
+        lambda url, *, keep=False: DiffSource(
+            repo_root=repo, base="NO_SUCH_BASE", head="NO_SUCH_HEAD",
+            cleanup=lambda: cleaned.__setitem__("v", True)),
+    )
+    result = CliRunner().invoke(cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 2
+    assert "git diff failed" in result.output
+    assert cleaned["v"] is True
+
+
+def test_cli_pr_cleans_up_on_empty_diff(repo: Path, monkeypatch):
+    """--pr with an empty diff exits 0 AND still runs cleanup (finally)."""
+    from kagura_code_reviewer.pr_source import DiffSource
+
+    cleaned = {"v": False}
+    monkeypatch.setattr(
+        cli_mod, "resolve_pr",
+        lambda url, *, keep=False: DiffSource(
+            repo_root=repo, base="HEAD", head="HEAD",
+            cleanup=lambda: cleaned.__setitem__("v", True)),
+    )
+    result = CliRunner().invoke(cli_mod.app, ["--pr", "https://github.com/o/r/pull/1"])
+    assert result.exit_code == 0
+    assert "No changes to review" in result.output
+    assert cleaned["v"] is True
+
+
 def test_cli_version_flag_prints_version_and_exits_zero():
     from kagura_code_reviewer import __version__
 

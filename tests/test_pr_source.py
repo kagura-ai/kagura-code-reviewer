@@ -207,6 +207,29 @@ def test_cleanup_logs_on_worktree_remove_failure(remote_clone: Path, monkeypatch
              cwd=remote_clone, capture_output=True, text=True)
 
 
+def test_resolve_pr_creates_base_remote_tracking_ref(remote_clone: Path):
+    """The combined fetch must populate origin/<base> so the three-dot diff resolves."""
+    src = pr_source.resolve_pr(
+        "https://github.com/o/r/pull/1", repo_root=remote_clone)
+    try:
+        sha = _git_out(remote_clone, "rev-parse", "--verify", "refs/remotes/origin/main")
+        assert sha  # non-empty object id
+    finally:
+        src.cleanup()
+
+
+def test_resolve_pr_works_without_source_branch_on_origin(remote_clone: Path):
+    """Closed/branch-deleted/fork case: only refs/pull/1/head exists on origin (no
+    pr-branch), yet resolve_pr still yields the PR head for review."""
+    assert "pr-branch" not in _git_out(remote_clone, "branch", "-r")
+    src = pr_source.resolve_pr(
+        "https://github.com/o/r/pull/1", repo_root=remote_clone)
+    try:
+        assert "PR_NEEDLE" in RepoTools(src.repo_root).read_file("a.py")
+    finally:
+        src.cleanup()
+
+
 def test_resolve_pr_keep_retains_worktree(remote_clone: Path):
     src = pr_source.resolve_pr(
         "https://github.com/o/r/pull/1", repo_root=remote_clone, keep=True)
